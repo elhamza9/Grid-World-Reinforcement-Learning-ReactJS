@@ -1,0 +1,43 @@
+.Grid {
+    text-align: center;
+    display: inline-block;
+}
+
+.Grid td {
+    width: 80px;
+    height: 80px;
+    border-top: 1px solid black;
+    border-right: 1px solid black;
+    font-size: 40px;
+}
+
+.Grid td.first-col {
+    border-left: 1px solid black;
+}
+
+.Grid td.last-row {
+    border-bottom: 1px solid black;
+    
+}
+
+
+.Grid td.current {
+    border-width: 2px;
+    border-color: blue
+}
+
+.Grid td.start {
+    background-color: azure;
+}
+
+.Grid td.goal {
+    background-color: lightgreen;
+}
+
+.Grid td.wall {
+    background-color: gray;
+}
+
+.Grid td.hole {
+    background-color: lightcoral;
+}
