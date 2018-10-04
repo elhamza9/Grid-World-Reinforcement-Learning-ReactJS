@@ -5,12 +5,16 @@
 
 .Grid .options {
     margin: 20px 0px;
-  }
+}
   
-  .Grid .options .radio {
+.Grid .options .radio {
     display: inline-block;
     margin-right: 20px;
-  }
+}
+
+.Grid table {
+    margin-top: 10px;
+}
 
 .Grid td {
     width: 80px;
@@ -28,7 +32,6 @@
     border-bottom: 1px solid black;
     
 }
-
 
 .Grid td.current {
     border-width: 2px;
