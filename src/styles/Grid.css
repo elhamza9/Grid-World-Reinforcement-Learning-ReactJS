@@ -12,16 +12,26 @@
     margin-right: 20px;
 }
 
+.Grid #gamma-input {
+    width: 30px;
+    text-align: center;
+}
+
 .Grid table {
     margin-top: 10px;
 }
 
 .Grid td {
-    width: 80px;
-    height: 80px;
+    width: 90px;
+    height: 90px;
     border-top: 1px solid black;
     border-right: 1px solid black;
     font-size: 40px;
+}
+
+.Grid td.editable:hover {
+    cursor: pointer;
+    background-color: bisque;
 }
 
 .Grid td.first-col {

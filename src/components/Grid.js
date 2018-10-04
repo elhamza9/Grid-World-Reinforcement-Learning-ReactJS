@@ -93,20 +93,20 @@ class Grid extends Component {
     }
 
     console.log(policies);
-
-    //this.customPolicyRadio = React.createRef(); // ref to the Radio for custom policy
+    this.gammaInput = React.createRef();
 
     this.state = {
       gridContent: 'agent',
       states : states,
       rewards: rewards,
-      policies: policies,
+      policies: policies,      // Map: for each state S -> [['R', 0.2], ['U', 0.8]]
       policyEditable: false,   // for the child component PolicyEditor
-      selectedState: '', 
+      selectedState: '',       // for the child component PolicyEditor
       selectedStatePolicy: [], // for the child component PolicyEditor
       values: values,
       currentI: props.startPos[0],
       currentJ: props.startPos[1],
+      gamma: 1                 // Discount Factor
     };
   }
 
@@ -233,7 +233,18 @@ class Grid extends Component {
   }
 
   evaluatePolicyClick = async (ev) => {
-    let gamma = 1;
+    // reinitialize V(s) to zero
+    let newVals = new Map(this.state.values);
+    for (let key of newVals.keys()) {
+      newVals.set(key, 0.0);
+    }
+    this.setState({
+      ...this.state,
+      values: newVals,
+      gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
+    });
+    await sleep(200);
+
     let old_val, new_val, new_state, policy, r, delta, threshold = 1e-3, problem=false, new_values_map=new Map(this.state.values), posOfState;
     while (true) {
       delta = 0;
@@ -256,7 +267,7 @@ class Grid extends Component {
               r = this.state.rewards.get(new_state);
               //console.log('move ' + a + ' --> new_state: ' + new_state + ' ---> Reward: ' + r);
               //console.log(`new_val (${a}) = ${new_val} + [${pr_a} * (${r} + ${gamma}*${new_values_map.get(new_state)})] = ${new_val}`);
-              new_val += a[1] * (r + gamma*new_values_map.get(new_state));
+              new_val += a[1] * (r + this.state.gamma*new_values_map.get(new_state));
               //console.log(`new_val = ${new_val}`);
               if (isNaN(new_val)) {
                 console.log('new_val is NaN');
@@ -284,11 +295,17 @@ class Grid extends Component {
 
   render() {
     console.log('render grid');
-    let rows = [], val, s;
+    let rows = [], val, s, isStartPos, isGoalPos, isHolePos, isWallPos;
     for (let i = 0 ; i < this.props.height ; i++) {
       let cols = [];
       for (let j = 0 ; j < this.props.width ; j++) {
-        if (this.state.gridContent === 'agent') {
+        isStartPos = (i === this.props.startPos[0] && j === this.props.startPos[1]);
+        isGoalPos  = (i === this.props.goalPos[0]  && j === this.props.goalPos[1]);
+        isHolePos  = (i === this.props.holePos[0]  && j === this.props.holePos[1]);
+        isWallPos  = (this.props.wallsPos.filter(pos=>pos[0] === i && pos[1] === j).length > 0 );
+        if (isWallPos) {
+          val = '';
+        } else if (this.state.gridContent === 'agent') {
           val = this.state.currentI === i && this.state.currentJ === j ? 'A' : '';
         } else if (this.state.gridContent === 'rewards') {
           val = this.state.rewards.get(i.toString().concat(j.toString()));
@@ -301,11 +318,12 @@ class Grid extends Component {
         <td key={s}
             className={`${i+1 === this.props.height ? 'last-row' : ''} \
                         ${j === 0 ? 'first-col' : ''} \
+                        ${this.state.policyEditable && !isStartPos && !isGoalPos && !isHolePos && !isWallPos ? 'editable' : ''}
                         ${i === this.state.currentI    && j === this.state.currentJ ? 'current' : ''} \
-                        ${i === this.props.startPos[0] && j === this.props.startPos[1] ? 'start' : ''} \
-                        ${i === this.props.goalPos[0]  && j === this.props.goalPos[1] ? 'goal' : ''} \
-                        ${i === this.props.holePos[0]  && j === this.props.holePos[1] ? 'hole' : ''} \
-                        ${this.props.wallsPos.filter(pos=>pos[0] === i && pos[1] === j).length > 0 ? 'wall' : ''} `}
+                        ${isStartPos ? 'start' : ''} \
+                        ${isGoalPos ? 'goal' : ''} \
+                        ${isHolePos ? 'hole' : ''} \
+                        ${isWallPos ? 'wall' : ''} `}
                         data-state={s}
                         onClick={this.gridStateClick}>
             {val}
@@ -348,6 +366,10 @@ class Grid extends Component {
               <input type="radio" value="iteration" name="policy" onChange={this.policyOptionChange} />
               <label>Policy Iteration</label>
             </div>
+          </div>
+          <div className="options">
+            <label>Discount Factor (gamma) : </label>
+            <input id="gamma-input" ref={this.gammaInput} type="text" defaultValue={this.state.gamma} />
           </div>
         <div>
           <button onClick={this.evaluatePolicyClick}>Evaluate Policy</button>

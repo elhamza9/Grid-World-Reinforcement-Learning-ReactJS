@@ -24,7 +24,7 @@ export default class PolicyEditor extends Component {
         for (let i of inputs) {
             if (i.value) {
                 console.log(i.dataset.action);
-                newPol.push([i.dataset.action, i.value]);
+                newPol.push([i.dataset.action, parseFloat(i.value)]);
             }
         }
         this.props.onSavePolicy(newPol)
