@@ -29,6 +29,10 @@
     font-size: 40px;
 }
 
+.Grid table.policies td {
+    font-size: 30px;
+}
+
 .Grid td.editable:hover {
     cursor: pointer;
     background-color: bisque;

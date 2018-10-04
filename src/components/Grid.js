@@ -106,7 +106,7 @@ class Grid extends Component {
       values: values,
       currentI: props.startPos[0],
       currentJ: props.startPos[1],
-      gamma: 1                 // Discount Factor
+      gamma: 0.9                 // Discount Factor
     };
   }
 
@@ -133,20 +133,21 @@ class Grid extends Component {
       return '';
     }
     for (let a of this.state.policies.get(this.getStateFromPos(from_pos[0], from_pos[1]))) {
-      if (action === a[0] && a[1] > 0) {
-        if (a[0] === 'U') {
+      if (action === a[0]) {
+        if (action === 'U') {
           newPos[0] = from_pos[0] - 1;
           newPos[1] = from_pos[1];
-        } else if (a[0] === 'D') {
+        } else if (action === 'D') {
           newPos[0] = from_pos[0] + 1;
           newPos[1] = from_pos[1];
-        } else if (a[0] === 'L') {
+        } else if (action === 'L') {
           newPos[0] = from_pos[0];
           newPos[1] = from_pos[1] - 1;
-        } else if (a[0] === 'R') {
+        } else if (action === 'R') {
           newPos[0] = from_pos[0];
           newPos[1] = from_pos[1] + 1;
         }
+        break;
       }
     }
     if (changeCurrentPos && newPos.length === 2) { // if we did move
@@ -162,12 +163,11 @@ class Grid extends Component {
 
   gridContentOptionChange = (ev) => {
     let v = ev.target.value;
-    if (v === 'agent' || v === 'rewards' || v === 'values') {
-      //this.props.setMode(v);
+    if (v === 'agent' || v === 'rewards' || v === 'values' || v === 'policies') {
       this.setState({
         ...this.state,
         gridContent: v,
-      })
+      });
     } else {
       alert('Unknown Mode clicked');
     }
@@ -198,10 +198,24 @@ class Grid extends Component {
         ...this.state,
         policyEditable: true,
       });
-    } else if (v === 'iteration') {
+    } else if (v === 'random') {
+      let pols = new Map(this.state.policies), p, r;
+      for (let s of pols.keys()) {
+        p = pols.get(s);
+        if (p.length > 0) {
+          r = Math.floor(Math.random()*p.length);
+          console.log(r);
+          for (let e of p) {
+            e[1] = 0;
+          }
+          p[r][1] = 1;
+          pols.set(s, p);
+        }
+      }
       this.setState({
         ...this.state,
-        policyEditable: false,
+        policyEditable: true,
+        policies: pols
       });
     } else {
       alert('Unknown Policy clicked');
@@ -293,9 +307,115 @@ class Grid extends Component {
     }
   };
 
+  policyIterationClick = async (ev) => {
+    this.setState({
+      ...this.state,
+      gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
+    });
+    await sleep(200);
+    let old_val, new_val, new_state, policy, r, delta, threshold = 1e-3, problem=false, new_values_map, posOfState;
+    let new_policy_map, policy_converged, old_a, new_a, best_val;
+    while (true) {
+      new_values_map = new Map(this.state.values);
+      new_policy_map = new Map(this.state.policies);
+      // policy evaluation
+      while (true) {
+        delta = 0;
+        if (problem) {
+          break;
+        }
+        for (let s of this.state.states) {
+          old_val = new_values_map.get(s);
+          policy = this.state.policies.get(s);
+          posOfState = this.getPosFromState(s);
+
+          if (policy.length > 0) { // is not terminal state 
+            new_val = 0;
+            //console.log(possible_moves);
+            for (let a of policy) {
+              // make the move and get the reward r and value of s' and return to s.
+              new_state = this.moveAgent(a[0], false, posOfState);
+              if (new_state.length === 2) {
+                r = this.state.rewards.get(new_state);
+                //console.log('move ' + a + ' --> new_state: ' + new_state + ' ---> Reward: ' + r);
+                //console.log(`new_val (${a}) = ${new_val} + [${pr_a} * (${r} + ${gamma}*${new_values_map.get(new_state)})] = ${new_val}`);
+                new_val += a[1] * (r + this.state.gamma*new_values_map.get(new_state));
+                //console.log(`new_val = ${new_val}`);
+                if (isNaN(new_val)) {
+                  console.log('new_val is NaN');
+                  problem = true;
+                  break;
+                }
+              } else {
+                console.log(`couldnt get state with move ${a[0]} from state ${posOfState} `);
+              }
+            }
+            // console.log('new_val: ', new_val);
+            new_values_map.set(s, new_val); // set new State ?
+            delta = Math.max(delta, Math.abs(old_val-new_val));
+          }
+        }
+        this.setState({...this.state, values: new_values_map});
+        await sleep(300);
+        // console.log('max delta: ', delta);
+        if (delta < threshold) {
+          console.log('policy evaluation has converged !');
+          break;
+        }
+      }
+
+      // policy improvement
+      policy_converged = true;
+      for (let s of this.state.states) {
+        policy = new_policy_map.get(s);
+        if (policy.length > 0) {
+          old_a  = policy.filter(e => e[1] === 1)[0][0];
+          best_val = Number.NEGATIVE_INFINITY;
+          posOfState = this.getPosFromState(s);
+
+          for (let a of policy) {
+            // get r of next state
+            new_state = this.moveAgent(a[0], false, posOfState);
+            r = this.state.rewards.get(new_state);
+            new_val = r + this.state.gamma*this.state.values.get(new_state);
+            if (new_val > best_val) {
+              new_a = a[0];
+              best_val = new_val;
+            }
+          }
+
+          if (old_a !== new_a) {
+            policy_converged = false;
+            let newPol = Array.from(policy);
+            for (let e of newPol) {
+              if (e[0] === new_a) {
+                e[1] = 1;
+              } else {
+                e[1] = 0;
+              }
+            }
+            console.log(newPol)
+            new_policy_map.set(s, newPol);
+          }
+        }
+      }
+
+      this.setState({
+        ...this.state,
+        policies: new_policy_map
+      });
+
+      await sleep(200);
+      if (policy_converged) {
+        break;
+      }
+
+    }
+  }
+
   render() {
     console.log('render grid');
-    let rows = [], val, s, isStartPos, isGoalPos, isHolePos, isWallPos;
+    let rows = [], val, s, isStartPos, isGoalPos, isHolePos, isWallPos, p, max;
     for (let i = 0 ; i < this.props.height ; i++) {
       let cols = [];
       for (let j = 0 ; j < this.props.width ; j++) {
@@ -303,17 +423,34 @@ class Grid extends Component {
         isGoalPos  = (i === this.props.goalPos[0]  && j === this.props.goalPos[1]);
         isHolePos  = (i === this.props.holePos[0]  && j === this.props.holePos[1]);
         isWallPos  = (this.props.wallsPos.filter(pos=>pos[0] === i && pos[1] === j).length > 0 );
+        s = `${i}${j}`;
         if (isWallPos) {
           val = '';
         } else if (this.state.gridContent === 'agent') {
           val = this.state.currentI === i && this.state.currentJ === j ? 'A' : '';
         } else if (this.state.gridContent === 'rewards') {
-          val = this.state.rewards.get(i.toString().concat(j.toString()));
+          val = this.state.rewards.get(s);
         } else if (this.state.gridContent === 'values') {
-          val = this.state.values.get(i.toString().concat(j.toString()));
+          val = this.state.values.get(s);
           val = val.toFixed(2);
+        } else if (this.state.gridContent === 'policies' && !isGoalPos && !isHolePos && !isWallPos) {
+          p = this.state.policies.get(s);
+          max = -1;
+          if (p.length > 0) {
+            for (let e of p) {
+              if (e[1] > max) {
+                val = `${e[0]}`;
+                max = e[1];
+              } else {
+              }
+            }
+          } else {
+            val = '';
+          }
+        } else {
+          val = '';
         }
-        s = `${i}${j}`;
+        
         cols.push(
         <td key={s}
             className={`${i+1 === this.props.height ? 'last-row' : ''} \
@@ -349,6 +486,10 @@ class Grid extends Component {
               <input type="radio" value="values"  name="grid-content" onChange={this.gridContentOptionChange} />
               <label>Values</label>
             </div>
+            <div className="radio">
+              <input type="radio" value="policies"  name="grid-content" onChange={this.gridContentOptionChange} />
+              <label>Policies</label>
+            </div>
           </div>
           <div className="options">
             <div className="radio">
@@ -363,8 +504,8 @@ class Grid extends Component {
               <label>Custom</label>
             </div>
             <div className="radio">
-              <input type="radio" value="iteration" name="policy" onChange={this.policyOptionChange} />
-              <label>Policy Iteration</label>
+              <input type="radio" value="random" name="policy" onChange={this.policyOptionChange} />
+              <label>Random</label>
             </div>
           </div>
           <div className="options">
@@ -373,13 +514,14 @@ class Grid extends Component {
           </div>
         <div>
           <button onClick={this.evaluatePolicyClick}>Evaluate Policy</button>
+          <button onClick={this.policyIterationClick}>Policy Iteration</button>
         </div>
-        <table>
+        <table className={this.state.gridContent}>
           <tbody>
             {rows}
           </tbody>
         </table>
-        <PolicyEditor policy={this.state.selectedStatePolicy} onSavePolicy={this.onSavePolicy} policy={this.state.selectedStatePolicy}  />
+        <PolicyEditor policy={this.state.selectedStatePolicy} onSavePolicy={this.onSavePolicy}  />
       </div>
     );
   }
