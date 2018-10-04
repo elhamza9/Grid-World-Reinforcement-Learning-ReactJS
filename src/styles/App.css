@@ -2,12 +2,3 @@
   text-align: center;
   margin: 0px 20px;
 }
-
-.App .options {
-  margin: 20px 0px;
-}
-
-.App .options .radio {
-  display: inline-block;
-  margin-right: 20px;
-}
