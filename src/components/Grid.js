@@ -107,7 +107,7 @@ class Grid extends Component {
       currentI: props.startPos[0],
       currentJ: props.startPos[1],
       gamma: 0.9,                 // Discount Factor
-      windy: true,
+      windy: false,
     };
   }
 
@@ -371,11 +371,18 @@ class Grid extends Component {
   };
 
   policyIterationClick = async (ev) => {
+    // reinitialize V(s) to zero
+    let newVals = new Map(this.state.values);
+    for (let key of newVals.keys()) {
+      newVals.set(key, 0.0);
+    }
     this.setState({
       ...this.state,
+      values: newVals,
       gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
     });
     await sleep(200);
+
     let old_val, new_val, new_state, policy, r, delta, threshold = 1e-3, problem=false, new_values_map, posOfState;
     let new_policy_map, newPol,  policy_converged, old_a, new_a, best_val;
     let prob_main_action, prob_other_actions; // if windy 0.5 for main and 0.5/3
@@ -479,6 +486,95 @@ class Grid extends Component {
 
     }
   }
+
+  valueIterationClick = async (ev) => {
+    // reinitialize V(s) to zero
+    let newVals = new Map(this.state.values);
+    for (let s of newVals.keys()) {
+      newVals.set(s, 0.0);
+    }
+    this.setState({
+      ...this.state,
+      values: newVals,
+      gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
+    });
+    await sleep(200);
+
+    // First Step
+    console.log('Starting First Step');
+    let old_val, v, new_val, policy, r, new_state, delta, new_values_map , threshold = 1e-3;
+    while (true) {
+      new_values_map=new Map(this.state.values);
+      delta = 0;
+      for (let s of this.state.states) {
+        policy = this.state.policies.get(s);
+        if (policy.length > 0) {  // not terminal state
+          old_val = new_values_map.get(s);
+          new_val = Number.NEGATIVE_INFINITY;
+          for (let a of policy) {
+            new_state = this.moveAgent(a[0], false, this.getPosFromState(s));
+            r = this.state.rewards.get(new_state);
+            v = r + this.state.gamma * new_values_map.get(new_state);
+            if (v > new_val) {
+              new_val = v;
+            }
+          }
+          new_values_map.set(s, new_val);
+          delta = Math.max(delta, Math.abs(old_val - new_val))
+        }
+      }
+      this.setState({
+        ...this.state,
+        values: new_values_map
+      });
+      await sleep(300);
+
+      console.log('delta : ' + delta);
+      if ( delta < threshold ) {
+        console.log('First Step converged !');
+        break;
+      }
+
+    }
+
+    // Second Step
+    console.log('Starting Second Step');
+    let new_a, new_policy_map=new Map(this.state.policies), new_pol, best_val;
+    let prob_main_action, prob_other_actions; // if windy 0.5 for main and 0.5/3 for others
+    prob_main_action = this.state.windy ? 0.5 : 1;
+    prob_other_actions = this.state.windy ? 0.5/3 : 0;
+    for (let s of this.state.states) {
+      policy = new_policy_map.get(s);
+      if (policy.length > 0) {
+        best_val = Number.NEGATIVE_INFINITY;
+        for (let a of policy) {
+          new_state = this.moveAgent(a[0], false, this.getPosFromState(s));
+          r = this.state.rewards.get(new_state);
+          v = r + this.state.gamma * this.state.values.get(new_state);
+          if (v > best_val) {
+            new_a = a[0];
+            best_val = v;
+          }
+        }
+        new_pol = Array.from(policy);
+        for (let a of new_pol) {
+          if (a[0] === new_a) {
+            a[1] = prob_main_action;
+          } else {
+            a[1] = prob_other_actions;
+          }
+        }
+        new_policy_map.set(s, new_pol);
+      }
+    }
+    this.setState({
+      ...this.state,
+      policies: new_policy_map
+    });
+    await sleep(200);
+  
+  }
+
 
   render() {
     console.log('render grid');
@@ -611,13 +707,14 @@ class Grid extends Component {
         <div className="actions">
           <button onClick={this.evaluatePolicyClick}>Evaluate Policy</button>
           <button onClick={this.policyIterationClick}>Policy Iteration</button>
+          <button onClick={this.valueIterationClick}>Value Iteration</button>
         </div>
         <table className={this.state.gridContent}>
           <tbody>
             {rows}
           </tbody>
         </table>
-        <PolicyEditor policy={this.state.selectedStatePolicy} onSavePolicy={this.onSavePolicy}  />
+        <PolicyEditor policy={this.state.selectedStatePolicy} onSavePolicy={this.onSavePolicy} />
       </div>
     );
   }
