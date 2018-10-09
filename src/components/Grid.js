@@ -4,6 +4,10 @@ import PolicyEditor from './PolicyEditor';
 
 import '../styles/Grid.css';
 
+import {setRewards} from './helpers/rewards';
+import {getStateFromPos, getPosFromState, initValuesToZero} from './helpers/general';
+import { randomizePolicies } from './helpers/policies';
+
 const sleep = (ms) => { return new Promise(resolve => setTimeout(resolve, ms))};
 
 class Grid extends Component {
@@ -16,6 +20,9 @@ class Grid extends Component {
     // construct map of rewards (s->reward)
     let states = [], rewards = new Map(), policies = new Map(), values = new Map();
     let s, r, p, moves, isGoal, isHole, isWall; // tmp vars to work with inside the loops
+    const goalReward = 1, holeReward = -1, stepCost = 0;
+    let goalState, holeState, wallStates=[];
+
     for (let i = 0 ; i < props.height ; i++) {
       for (let j = 0 ; j < props.width ; j++) {
         isGoal = i === props.goalPos[0] && j === props.goalPos[1];
@@ -26,11 +33,16 @@ class Grid extends Component {
         states.push(s);
         // set reward
         if (isGoal) {
-          r = 1;
+          r = goalReward;
+          goalState = s;
         } else if (isHole) {
-          r = -1;
-        } else {
+          r = holeReward;
+          holeState = s;
+        } else if (isWall) {
           r = 0;
+          wallStates.push(s);
+        } else {
+          r = stepCost;
         }
         rewards.set(s, r);
         // set possible moves
@@ -50,6 +62,7 @@ class Grid extends Component {
         }
         p = []; // policy array for each state gives the prb of each action
                 // example: [[U, pr(U)],[L, pr(L)], ...]
+                // initialization: uniform (each action has pr 1/length_possible_moves)
         for (let m of moves) {
           if (m !== null) {
             p.push([m, 0]);
@@ -65,6 +78,7 @@ class Grid extends Component {
     // for each wall go the states near it, and remove the action that leads to the wall
     let neighbours = {r : null, l : null, u : null , d : null}, neighbour, action_to_remove;
     let policy;
+    let new_pol;
     for (let w of props.wallsPos) {
       neighbours.r = w[1] === (props.width-1) ? null : [w[0], w[1]+1];
       neighbours.l = w[1] === 0 ? null : [w[0], w[1]-1];
@@ -73,7 +87,7 @@ class Grid extends Component {
       for (let key in neighbours ) {
         neighbour = neighbours[key];
         if (neighbour !== null) {
-          s = this.getStateFromPos(neighbour[0], neighbour[1]);
+          s = getStateFromPos(neighbour[0], neighbour[1]);
           policy = policies.get(s);
           if (key === 'r') {
             action_to_remove = 'L';
@@ -84,47 +98,56 @@ class Grid extends Component {
           } else if (key === 'd') {
             action_to_remove = 'U';
           } else {
+            action_to_remove = '';
             console.log('key unknown !!!!');
           }
-          policies.set(s, policy.filter(e => e[0] !== action_to_remove));
-          //moves.splice(moves.indexOf(action), 1);
+          new_pol = [];
+          if (action_to_remove.length > 0) {
+            for (let e of policy) {
+              if (e[0] !== action_to_remove) {
+                new_pol.push([e[0], 0]);
+              }
+            }
+            policies.set(s, new_pol);
+          }
         }
       }
     }
 
+    // Randomize initial policies
+    policies = randomizePolicies(policies, 1, 0);
     console.log(policies);
+
+    // Create some references
     this.gammaInput = React.createRef();
+    this.stepCostInput = React.createRef();
+    this.randomizePolicyRadio = React.createRef();
 
     this.state = {
       gridContent: 'agent',
       states : states,
+      goalState: goalState,
+      holeState: holeState,
+      wallStates: wallStates,
       rewards: rewards,
+      stepCost: stepCost,
+      goalReward: goalReward,
+      holeReward: holeReward,
       policies: policies,      // Map: for each state S -> [['R', 0.2], ['U', 0.8]]
-      policyEditable: false,   // for the child component PolicyEditor
+      policyEditable: true,    // for the child component PolicyEditor
       selectedState: '',       // for the child component PolicyEditor
       selectedStatePolicy: [], // for the child component PolicyEditor
       values: values,
+      gamma: 0.9,              // Discount Factor
+      windy: false,
       currentI: props.startPos[0],
       currentJ: props.startPos[1],
-      gamma: 0.9,                 // Discount Factor
-      windy: false,
+      converged: false,
     };
   }
 
-  getStateFromPos = (i, j) => {
-    return i.toString().concat(j.toString());
-  }
-
-  getPosFromState = (s) => {
-    if (typeof(s) === 'string' && s.length === 2) {
-      return [parseInt(s[0], 10), parseInt(s[1], 10)];
-    } else {
-      return [];
-    }
-  }
-
   getCurrentState = () => {
-    return this.getStateFromPos(this.state.currentI, this.state.currentJ);
+    return getStateFromPos(this.state.currentI, this.state.currentJ);
   }
 
   // returns state
@@ -133,7 +156,7 @@ class Grid extends Component {
     if (from_pos.length !== 2) {
       return '';
     }
-    for (let a of this.state.policies.get(this.getStateFromPos(from_pos[0], from_pos[1]))) {
+    for (let a of this.state.policies.get(getStateFromPos(from_pos[0], from_pos[1]))) {
       if (action === a[0]) {
         if (action === 'U') {
           newPos[0] = from_pos[0] - 1;
@@ -159,7 +182,7 @@ class Grid extends Component {
         currentJ: newPos[1]
       });
     }
-    return newPos.length === 2 ? this.getStateFromPos(newPos[0], newPos[1]) : '';
+    return newPos.length === 2 ? getStateFromPos(newPos[0], newPos[1]) : '';
   }
 
   gridContentOptionChange = (ev) => {
@@ -174,8 +197,7 @@ class Grid extends Component {
     }
   }
 
-
-  gridOptionChange = (ev) => {
+  gridTypeOptionChange = (ev) => {
     if (ev.target.value === 'standard') {
       this.setState({
         ...this.state,
@@ -191,10 +213,11 @@ class Grid extends Component {
     }
   }
 
-  policyOptionChange = (ev) => {
+  policyTypeOptionChange = (ev) => {
     let v = ev.target.value;
+    let pols;
     if (v === 'uniform') {
-      let pols = new Map(this.state.policies);
+      pols = new Map(this.state.policies);
       let pr;
       let policy;
       for (let s of this.state.states) {
@@ -206,84 +229,51 @@ class Grid extends Component {
           }
         }
       }
-      this.setState({
-        ...this.state,
-        policies: pols,
-        policyEditable: true,
-      });
-    } else if (v === 'custom') {
-      this.setState({
-        ...this.state,
-        policyEditable: true,
-      });
     } else if (v === 'random') {
-      let pols = new Map(this.state.policies), p, r;
       let prob_main_action = this.state.windy ? 0.5 : 1;
       let prob_other_actions = this.state.windy ? 0.5/3 : 0;
-      for (let s of pols.keys()) {
-        p = pols.get(s);
-        if (p.length > 0) {
-          r = Math.floor(Math.random()*p.length);
-          console.log(r);
-          for (let e of p) {
-            e[1] = prob_other_actions;
-          }
-          p[r][1] = prob_main_action;
-          pols.set(s, p);
-        }
-      }
-      this.setState({
-        ...this.state,
-        policyEditable: true,
-        policies: pols
-      });
+      pols = randomizePolicies(this.state.policies, prob_main_action, prob_other_actions);
     } else {
       alert('Unknown Policy clicked');
     }
+    this.setState({
+      ...this.state,
+      policies: pols,
+      converged: false,
+    });
   }
 
-  rewardOptionChange = (ev) => {
-    let newRewards = new Map(this.state.rewards);
-    let goalState = `${this.props.goalPos[0]}${this.props.goalPos[1]}`;
-    let holeState = `${this.props.holePos[0]}${this.props.holePos[1]}`;
-    let wallStates = [];
-    for (let w of this.props.wallsPos) {
-      wallStates.push(`${w[0]}${w[1]}`);
-    }
+  rewardTypeOptionChange = (ev) => {
+    let newStepCost;
+
     if (ev.target.value === 'standard') {
-      for (let s of newRewards.keys()) {
-        if (s === goalState) {
-          newRewards.set(s, 1);
-        } else if (s === holeState) {
-          newRewards.set(s, -1);
-        } else if ( s in wallStates) {
-          newRewards.set(s, 0)
-        }
-        else {
-          newRewards.set(s, 0)
-        }
-      }
+      newStepCost = 0;
     } else if (ev.target.value === 'negative') {
-      for (let s of newRewards.keys()) {
-        if (s === goalState) {
-          newRewards.set(s, 1);
-        } else if (s === holeState) {
-          newRewards.set(s, -1);
-        } else if ( s in wallStates) {
-          newRewards.set(s, 0)
-        } else {
-          newRewards.set(s, -1)
-        }
-      }
-    } else if (ev.target.value === 'custom') {
-      alert('TODO');
-      // TODO
+      newStepCost = -1;
     }
+    let newRewards = setRewards(this.state.rewards, this.state.goalState, this.state.goalReward, this.state.holeState, this.state.holeReward, this.state.wallStates, newStepCost);
+    this.stepCostInput.current.value = newStepCost;
     this.setState({
       ...this.state, 
-      rewards: newRewards
-    })
+      rewards: newRewards,
+      stepCost: newStepCost,
+    });
   };
+
+  stepCostInputChange = (ev) => {
+    let newStepCost = parseFloat(ev.target.value);
+    if (!isNaN(newStepCost) && newStepCost < 0) {
+      let newRewards = setRewards(this.state.rewards, this.state.goalState, this.state.goalReward, this.state.holeState, this.state.holeReward, this.state.wallStates, newStepCost);
+      //this.stepCostInput.current.value = newStepCost;
+      this.setState({
+        ...this.state, 
+        rewards: newRewards,
+        stepCost: newStepCost,
+        converged: false
+      });
+    }
+  }
+
 
   gridStateClick = (ev) => {
     if (this.state.gridContent === 'policies' && this.state.policyEditable) {
@@ -296,6 +286,7 @@ class Grid extends Component {
     }
   }
 
+  // what to do when editing policy of a state from policy editor is done
   onSavePolicy = (newPolicy) => {
     let newPolicies = new Map(this.state.policies);
     if (newPolicy) {
@@ -305,19 +296,16 @@ class Grid extends Component {
       ...this.state,
       selectedState: '',
       selectedStatePolicy: [],
-      policies: newPolicies
+      policies: newPolicies,
+      converged: false
     });
   }
 
   evaluatePolicyClick = async (ev) => {
     // reinitialize V(s) to zero
-    let newVals = new Map(this.state.values);
-    for (let key of newVals.keys()) {
-      newVals.set(key, 0.0);
-    }
     this.setState({
       ...this.state,
-      values: newVals,
+      values: initValuesToZero(this.state.values),
       gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
     });
     await sleep(200);
@@ -331,7 +319,7 @@ class Grid extends Component {
       for (let s of this.state.states) {
         old_val = new_values_map.get(s);
         policy = this.state.policies.get(s);
-        posOfState = this.getPosFromState(s);
+        posOfState = getPosFromState(s);
         //console.log('evaluating state : ' + s + ' (' + posOfState[0] + ',' + posOfState[1] + ')');
         // console.log('possible moves: ', possible_moves);
         if (policy.length > 0) { // is not terminal state 
@@ -365,29 +353,34 @@ class Grid extends Component {
       // console.log('max delta: ', delta);
       if (delta < threshold) {
         console.log('policy evaluation has converged !');
+        this.setState({
+          ...this.state,
+          converged: true
+        });
         break;
       }
     }
   };
 
   policyIterationClick = async (ev) => {
-    // reinitialize V(s) to zero
-    let newVals = new Map(this.state.values);
-    for (let key of newVals.keys()) {
-      newVals.set(key, 0.0);
+    let prob_main_action, prob_other_actions; // if windy 0.5 for main and 0.5/3 for others
+    prob_main_action   = this.state.windy ? 0.5 : 1;
+    prob_other_actions = this.state.windy ? 0.5/3 : 0;
+    // reinitialize V(s) to zero and randomize policy
+    if (!this.randomizePolicyRadio.current.checked) {
+      this.randomizePolicyRadio.current.click();
     }
     this.setState({
       ...this.state,
-      values: newVals,
-      gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
+      policies: (this.randomizePolicyRadio.current.checked && this.state.converged )? randomizePolicies(this.state.policies, prob_main_action, prob_other_actions) : this.state.policies,
+      values: initValuesToZero(this.state.values),
+      gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
+      converged: false,
     });
     await sleep(200);
 
     let old_val, new_val, new_state, policy, r, delta, threshold = 1e-3, problem=false, new_values_map, posOfState;
     let new_policy_map, newPol,  policy_converged, old_a, new_a, best_val;
-    let prob_main_action, prob_other_actions; // if windy 0.5 for main and 0.5/3
-    prob_main_action = this.state.windy ? 0.5 : 1;
-    prob_other_actions = this.state.windy ? 0.5/3 : 0;
 
     while (true) {
       new_values_map = new Map(this.state.values);
@@ -401,7 +394,7 @@ class Grid extends Component {
         for (let s of this.state.states) {
           old_val = new_values_map.get(s);
           policy = this.state.policies.get(s);
-          posOfState = this.getPosFromState(s);
+          posOfState = getPosFromState(s);
 
           if (policy.length > 0) { // is not terminal state
             new_val = 0;
@@ -445,7 +438,7 @@ class Grid extends Component {
         if (policy.length > 0) {
           old_a  = policy.filter(e => e[1] === prob_main_action)[0][0];
           best_val = Number.NEGATIVE_INFINITY;
-          posOfState = this.getPosFromState(s);
+          posOfState = getPosFromState(s);
 
           for (let a of policy) {
             // get r of next state
@@ -481,6 +474,10 @@ class Grid extends Component {
 
       await sleep(200);
       if (policy_converged) {
+        this.setState({
+          ...this.state,
+          converged: true
+        });
         break;
       }
 
@@ -488,17 +485,22 @@ class Grid extends Component {
   }
 
   valueIterationClick = async (ev) => {
-    // reinitialize V(s) to zero
-    let newVals = new Map(this.state.values);
-    for (let s of newVals.keys()) {
-      newVals.set(s, 0.0);
+    let prob_main_action, prob_other_actions; // if windy 0.5 for main and 0.5/3 for others
+    prob_main_action   = this.state.windy ? 0.5 : 1;
+    prob_other_actions = this.state.windy ? 0.5/3 : 0;
+    // reinitialize V(s) to zero and randomize Policies radio is not checked or if checked and converged
+    if (!this.randomizePolicyRadio.current.checked) {
+      this.randomizePolicyRadio.current.click();
     }
     this.setState({
       ...this.state,
-      values: newVals,
-      gamma: parseFloat(this.gammaInput.current.value) // get Gamma from input
+      policies: (this.randomizePolicyRadio.current.checked && this.state.converged )? randomizePolicies(this.state.policies, prob_main_action, prob_other_actions) : this.state.policies,
+      values: initValuesToZero(this.state.values),
+      gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
+      converged: false,
     });
     await sleep(200);
+
 
     // First Step
     console.log('Starting First Step');
@@ -512,7 +514,7 @@ class Grid extends Component {
           old_val = new_values_map.get(s);
           new_val = Number.NEGATIVE_INFINITY;
           for (let a of policy) {
-            new_state = this.moveAgent(a[0], false, this.getPosFromState(s));
+            new_state = this.moveAgent(a[0], false, getPosFromState(s));
             r = this.state.rewards.get(new_state);
             v = r + this.state.gamma * new_values_map.get(new_state);
             if (v > new_val) {
@@ -540,15 +542,13 @@ class Grid extends Component {
     // Second Step
     console.log('Starting Second Step');
     let new_a, new_policy_map=new Map(this.state.policies), new_pol, best_val;
-    let prob_main_action, prob_other_actions; // if windy 0.5 for main and 0.5/3 for others
-    prob_main_action = this.state.windy ? 0.5 : 1;
-    prob_other_actions = this.state.windy ? 0.5/3 : 0;
+
     for (let s of this.state.states) {
       policy = new_policy_map.get(s);
       if (policy.length > 0) {
         best_val = Number.NEGATIVE_INFINITY;
         for (let a of policy) {
-          new_state = this.moveAgent(a[0], false, this.getPosFromState(s));
+          new_state = this.moveAgent(a[0], false, getPosFromState(s));
           r = this.state.rewards.get(new_state);
           v = r + this.state.gamma * this.state.values.get(new_state);
           if (v > best_val) {
@@ -569,7 +569,8 @@ class Grid extends Component {
     }
     this.setState({
       ...this.state,
-      policies: new_policy_map
+      policies: new_policy_map,
+      converged: true,
     });
     await sleep(200);
   
@@ -601,7 +602,7 @@ class Grid extends Component {
           max = -1;
           if (p.length > 0) {
             for (let e of p) {
-              if (e[1] > max) {
+              if (e[1] > max && e[1] !== 0) {
                 val = `${e[0]}`;
                 max = e[1];
               }
@@ -638,7 +639,7 @@ class Grid extends Component {
             </div>
             <div className="radio">
               <input checked={this.state.gridContent==='agent'} type="radio" value="agent" name="grid-content" onChange={this.gridContentOptionChange} />
-              <label>Agent</label>
+              <label>Grid</label>
             </div>
             <div className="radio">
               <input type="radio" value="rewards" name="grid-content" onChange={this.gridContentOptionChange} />
@@ -653,63 +654,62 @@ class Grid extends Component {
               <label>Policies</label>
             </div>
           </div>
-          <div hidden={this.state.gridContent!=='policies'} className="options policies">
-              <div className="radio">
-                <p>Policy :</p>
-              </div>
-              <div className="radio">
-                <input type="radio" value="uniform" name="policy" onChange={this.policyOptionChange} />
-                <label>Uniform</label>
-              </div>
-              <div className="radio">
-                <input type="radio" value="custom" name="policy" onChange={this.policyOptionChange} />
-                <label>Custom</label>
-              </div>
-              <div className="radio">
-                <input type="radio" value="random" name="policy" defaultChecked={true} onChange={this.policyOptionChange} />
-                <label>Random</label>
-              </div>
-          </div>
-          <div hidden={this.state.gridContent!=='rewards'} className="options rewards">
-            <div className="radio">
-              <p>Reward :</p>
-            </div>
-            <div className="radio">
-              <input type="radio" value="standard" name="reward" defaultChecked={true} onChange={this.rewardOptionChange}/>
-              <label>Standard</label>
-            </div>
-            <div className="radio">
-              <input type="radio" value="negative" name="reward" onChange={this.rewardOptionChange}/>
-              <label>Negative</label>
-            </div>
-            <div className="radio">
-              <input type="radio" value="custom" name="reward" onChange={this.rewardOptionChange}/>
-              <label>Custom</label>
-            </div>
-          </div>
           <div className="options grid" hidden={this.state.gridContent!=='agent'}>
             <div className="radio">
                 <p>Grid Type</p>
             </div>
             <div className="radio">
-                <input type="radio" value="standard" name="grid-type" onChange={this.gridOptionChange} defaultChecked={true}/>
+                <input type="radio" value="standard" name="grid-type" onChange={this.gridTypeOptionChange} defaultChecked={true}/>
                 <label>Standard</label>
             </div>
             <div className="radio">
-                <input type="radio" value="windy" name="grid-type" onChange={this.gridOptionChange}/>
+                <input type="radio" value="windy" name="grid-type" onChange={this.gridTypeOptionChange}/>
                 <label>Windy</label>
             </div>
           </div>
-          <div className="options">
+          <div className="options rewards" hidden={this.state.gridContent!=='rewards'} >
+            <div className="radio">
+              <p>Reward :</p>
+            </div>
+            <div className="radio">
+              <input type="radio" value="standard" name="reward" defaultChecked={true} onChange={this.rewardTypeOptionChange}/>
+              <label>Standard</label>
+            </div>
+            <div className="radio">
+              <input type="radio" value="negative" name="reward" onChange={this.rewardTypeOptionChange}/>
+              <label>Negative </label>
+              ( <input ref={this.stepCostInput} className="small-input" type="text" defaultValue={this.state.stepCost} onChange={this.stepCostInputChange} /> )
+            </div>
+          </div>
+          <div hidden={this.state.gridContent!=='policies'} className="options policies">
+              <div className="radio">
+                <p>Policy :</p>
+              </div>
+              <div className="radio">
+                <input type="radio" value="uniform" name="policy" onChange={this.policyTypeOptionChange} />
+                <label>Uniform</label>
+              </div>
+              <div className="radio">
+                <input ref={this.randomizePolicyRadio} defaultChecked={true} type="radio" value="random" name="policy" onChange={this.policyTypeOptionChange} />
+                <label>Randomize</label>
+              </div>
+              {/*
+              <div className="radio">
+                <input type="radio" value="custom" name="policy" onChange={this.policyOptionChange} />
+                <label>Custom</label>
+              </div>
+              */}
+          </div>
+          <div className="options gamma">
             <label>Discount Factor (gamma) : </label>
-            <input id="gamma-input" ref={this.gammaInput} type="text" defaultValue={this.state.gamma} />
+            <input className="small-input" ref={this.gammaInput} type="text" defaultValue={this.state.gamma} />
           </div>
         <div className="actions">
-          <button onClick={this.evaluatePolicyClick}>Evaluate Policy</button>
-          <button onClick={this.policyIterationClick}>Policy Iteration</button>
-          <button onClick={this.valueIterationClick}>Value Iteration</button>
+          <button onClick={this.evaluatePolicyClick}  className="action-btn">Evaluate Policy</button>
+          <button onClick={this.policyIterationClick} className="action-btn">Policy Iteration</button>
+          <button onClick={this.valueIterationClick}  className="action-btn">Value Iteration</button>
         </div>
-        <table className={this.state.gridContent}>
+        <table className={`${this.state.gridContent} ${this.state.windy ? 'windy' : ''}`}>
           <tbody>
             {rows}
           </tbody>

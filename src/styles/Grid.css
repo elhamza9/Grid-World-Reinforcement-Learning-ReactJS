@@ -13,13 +13,35 @@
     margin-right: 20px;
 }
 
-.Grid #gamma-input {
-    width: 30px;
+.Grid .small-input {
+    width: 35px;
     text-align: center;
+    font-size: 14px;
+}
+
+.Grid .action-btn {
+    background-color: #4CAF50;
+    color: white;
+    height: 50px;
+    font-size: 14px;
+    border: 2px solid white;
+    cursor: pointer;
+}
+
+.Grid .action-btn:hover {
+    border: 1px solid red;
 }
 
 .Grid table {
     margin-top: 10px;
+}
+
+.Grid table.windy {
+    //background-image: url('/img/wind.gif');
+    background-image: url('/img/wind-dreams.jpg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
 .Grid td {
