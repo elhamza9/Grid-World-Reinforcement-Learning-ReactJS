@@ -37,7 +37,6 @@
 }
 
 .Grid table.windy {
-    //background-image: url('/img/wind.gif');
     background-image: url('/img/wind-dreams.jpg');
     background-size: cover;
     background-repeat: no-repeat;
@@ -89,4 +88,23 @@
 
 .Grid td.hole {
     background-color: lightcoral;
+}
+
+.Grid #converged {
+    color: red;
+    font-size: 60px;
+    width: 800px;
+    height: 100px;
+    position: absolute;
+    margin: auto;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    animation: fadein 1s;
+}
+
+@keyframes fadein {
+    from { opacity: 0; font-size: 30px; }
+    to   { opacity: 1; font-size: 60px;}
 }

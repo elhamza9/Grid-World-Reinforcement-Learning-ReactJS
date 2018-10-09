@@ -198,18 +198,13 @@ class Grid extends Component {
   }
 
   gridTypeOptionChange = (ev) => {
-    if (ev.target.value === 'standard') {
+    if (ev.target.value === 'standard' || ev.target.value === 'windy') {
       this.setState({
         ...this.state,
-        windy: false,
+        windy: ev.target.value === 'windy' ? true : false,
+        converged: false,
+        policies: this.randomizePolicyRadio.current.checked ? randomizePolicies(this.state.policies, ev.target.value === 'windy' ? 0.5 : 1, ev.target.value === 'windy' ? 0.5/3 : 0) : this.state.policies,
       });
-    } else if (ev.target.value === 'windy') {
-      this.setState({
-        ...this.state,
-        windy: true,
-      });
-    } else {
-      alert('unknown grid world type');
     }
   }
 
@@ -257,6 +252,7 @@ class Grid extends Component {
       ...this.state, 
       rewards: newRewards,
       stepCost: newStepCost,
+      converged: false,
     });
   };
 
@@ -494,7 +490,7 @@ class Grid extends Component {
     }
     this.setState({
       ...this.state,
-      policies: (this.randomizePolicyRadio.current.checked && this.state.converged )? randomizePolicies(this.state.policies, prob_main_action, prob_other_actions) : this.state.policies,
+      policies: ((this.randomizePolicyRadio.current.checked && this.state.converged) || !this.state.converged )? randomizePolicies(this.state.policies, prob_main_action, prob_other_actions) : this.state.policies,
       values: initValuesToZero(this.state.values),
       gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
       converged: false,
@@ -715,6 +711,7 @@ class Grid extends Component {
           </tbody>
         </table>
         <PolicyEditor policy={this.state.selectedStatePolicy} onSavePolicy={this.onSavePolicy} />
+        <h2 id="converged" hidden={!this.state.converged}>CONVERGED !</h2>
       </div>
     );
   }
