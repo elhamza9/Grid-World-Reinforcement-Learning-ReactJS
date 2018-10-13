@@ -5,3 +5,16 @@ body {
 .App {
   text-align: center;
 }
+
+.App main {
+}
+
+.App #grid-wrapper {
+    width: 70%;
+    float: left;
+}
+
+.App #logger-wrapper {
+  width: 30%;
+  float: left;
+}

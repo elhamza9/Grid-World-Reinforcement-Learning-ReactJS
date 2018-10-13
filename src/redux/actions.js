@@ -1,16 +1,10 @@
 
-export const setCurrentPositionAction = (i,j) => ({
-    type: 'SET_CURRENT_POS_ACTION',
-    payload: {i: i, j: j}
+export const resetAction = () => ({
+    type: 'RESET_ACTION',
+    payload: {}
 });
 
-
-export const initValueFunctionAction = (states) => ({
-    type: 'INIT_STATE_VALUES_ACTION',
-    payload: {states: states}
+export const addAction = (action_title, data, type, level) => ({
+    type: 'ADD_ACTION',
+    payload: {actionTitle: action_title, data: data, type: type, level: level}
 });
-
-export const setModeAction = (mode) => ({
-    type: 'SET_MODE_ACTION',
-    payload: {mode: mode}
-})

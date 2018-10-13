@@ -1,40 +1,40 @@
 
 const initState = {
-    mode: 'values', // show agent / show values of states / show possible moves
-    currentI: 0,
-    currentJ: 0,
-    values: new Map()
-}
+    last_action_title: 'DO SOMETHING',
+    data: null, // usually either 2D array, or string for arithmetic 
+    type: 'string', // usually either 2D array, or string for arithmetic 
+    level: 0, 
+    reset: false,
+};
 
 const appReducer = (state=initState, action) => {
+
     switch(action.type) {
 
-        case 'INIT_STATE_VALUES_ACTION':
-            let newVals = new Map();
-            for (let s of action.payload.states) {
-                newVals.set(s, 0);
-            }
+        case 'RESET_ACTION':
             return {
-                ...state,
-                values: newVals,
-            }
+                last_action_title: null,
+                data: null,
+                type: null,
+                level: 0,
+                reset: true,
+            };
 
-        case 'SET_CURRENT_POS_ACTION':
+        case 'ADD_ACTION':
             return {
                 ...state,
-                currentI: action.payload.i,
-                currentJ: action.payload.j,
-            }
-
-        case 'SET_MODE_ACTION':
-            return {
-                ...state,
-                mode: action.payload.mode
-            }
+                last_action_title: action.payload.actionTitle,
+                data: action.payload.data,
+                type: action.payload.type,
+                level: action.payload.level,
+                reset: false,
+            };
 
         default:
             return state;
+
     }
+
 };
 
 export default appReducer;

@@ -1,10 +1,8 @@
 import React, { Component } from 'react';
-import {connect} from 'react-redux';
 
 import './styles/App.css';
 import Grid from './components/Grid';
-
-import {setModeAction} from './redux/actions';
+import Logger from './components/Logger';
 
 class App extends Component {
 
@@ -16,11 +14,17 @@ class App extends Component {
           <h1>WELCOME TO GRID WORLD !</h1>
         </header>
         <main>
-          <Grid width={4} height={3}
-                startPos={[2,0]}
-                goalPos={[0,3]}
-                holePos={[1,3]}
-                wallsPos={[[1,1]]} />
+          <div id="grid-wrapper">
+            <Grid width={4} height={3}
+                  startPos= {[2,0]}
+                  goalPos = {[0,3]}
+                  holePos = {[1,3]}
+                  wallsPos= {[[1,1]]} />
+          </div>
+          <div id="logger-wrapper">
+            <Logger />
+          </div>
+          
         </main>
       </div>
     );
@@ -28,16 +32,4 @@ class App extends Component {
 
 }
 
-const mapStateToProps = (state) => {
-  return {
-    test: state.test
-  }
-}
-
-const mapDispatchToProps = (dispatch) => {
-  return {
-    setMode: (mode) => {dispatch(setModeAction(mode))},
-  }
-}
-
-export default connect(mapStateToProps, mapDispatchToProps)(App);
+export default App;

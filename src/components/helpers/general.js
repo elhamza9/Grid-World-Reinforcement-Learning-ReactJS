@@ -12,6 +12,7 @@ export const getPosFromState = (s) => {
     }
 };
 
+
 export const initValuesToZero = (valuesMap) => {
     let newVals = new Map(valuesMap);
     for (let s of newVals.keys()) {
@@ -19,4 +20,17 @@ export const initValuesToZero = (valuesMap) => {
     }
     return newVals;
 };
+
+export const randomizeValues = (values_map, zero_states) => {
+    console.log(zero_states);
+    let newVals = new Map(values_map);
+    for (let s of newVals.keys()) {
+        if (zero_states.includes(s)) {
+            newVals.set(s, 0);
+        } else {
+            newVals.set(s, Math.random());
+        }
+    }
+    return newVals;
+}
 
