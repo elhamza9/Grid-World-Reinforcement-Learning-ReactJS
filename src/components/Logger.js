@@ -13,7 +13,7 @@ class Logger extends Component {
         this.loggerContent = React.createRef();
         this.state = {
             logs : [],
-            visibleLogLevels: [0,1,2]
+            visibleLogLevels: [0,1]
         }
     }
 
@@ -120,15 +120,18 @@ class Logger extends Component {
                     <h3 className="title">LOGS</h3>
                     <div className="levels">
                         <div className="level-radio">
+                            <label>Level : </label>
+                        </div>
+                        <div className="level-radio">
                             <input type="radio" value="0" name="level" onChange={this.onLogChange}/>
                             <label>Zero</label>
                         </div>
                         <div className="level-radio">
-                            <input type="radio" value="1" name="level" onChange={this.onLogChange}/>
+                            <input type="radio" value="1" name="level" onChange={this.onLogChange} defaultChecked={true}/>
                             <label>One</label>
                         </div>
                         <div className="level-radio">
-                            <input type="radio" value="2" name="level" onChange={this.onLogChange} defaultChecked={true} />
+                            <input type="radio" value="2" name="level" onChange={this.onLogChange} />
                             <label>Two</label>
                         </div>
                     </div>

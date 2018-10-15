@@ -1,12 +1,11 @@
 import React, { Component } from 'react';
 import { connect } from "react-redux";
 
-import PolicyEditor from './PolicyEditor';
 
 import '../styles/Grid.css';
 
 import {setRewards} from './helpers/rewards';
-import {getStateFromPos, getPosFromState, initValuesToZero, randomizeValues} from './helpers/general';
+import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues} from './helpers/general';
 import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy } from './helpers/policy';
 import { bellman_loop_actions, bellman_single_action } from './helpers/algorithms';
 import { addAction, resetAction } from '../redux/actions';
@@ -17,139 +16,135 @@ class Grid extends Component {
 
   constructor (props) {
     super(props);
-    console.log('construct grid');
-    // construct list of all states (grid[1][2] => encoded as string '12' )
-    // IMPORTANT: will work for now with max 10x10 grid, meaning that state will be 2 charachters ('99')
-    // construct map of rewards (s->reward)
-    let states = [], rewards = new Map(), states_transitions = new Map(), values = new Map(), allowed_moves = new Map();
-    let s, r, tran, moves, isGoal, isHole, isWall; // tmp vars to work with inside the loops
-    const goalReward = 1, holeReward = -1, stepCost = 0;
-    let goalState, holeState, wallStates=[];
-
-    for (let i = 0 ; i < props.height ; i++) {
-      for (let j = 0 ; j < props.width ; j++) {
-        isGoal = i === props.goalPos[0] && j === props.goalPos[1];
-        isHole = i === props.holePos[0] && j === props.holePos[1];
-        isWall = props.wallsPos.filter(pos=>(pos[0] === i && pos[1] === j)).length > 0;
-        // add state
-        s = i.toString().concat(j.toString());
-        states.push(s);
-        // set reward
-        if (isGoal) {
-          r = goalReward;
-          goalState = s;
-        } else if (isHole) {
-          r = holeReward;
-          holeState = s;
-        } else if (isWall) {
-          r = 0;
-          wallStates.push(s);
-        } else {
-          r = stepCost;
-        }
-        rewards.set(s, r);
-        // set possible moves
-        tran = []; // array for each action: gives the prb of transition, each action
-        if (isGoal || isHole || isWall) {
-          moves = [];
-        } else {
-          moves = ['U', 'D', 'L', 'R'];
-          for(let m of moves) {
-            tran.push([m, 1]);
-          }
-          // example: [[U, pr(U)],[L, pr(L)], ...]
-          // initialization: uniform (each action has pr 1/length_possible_moves)
-
-          if (j === (props.width - 1)) {
-            moves.splice(3,1);
-          } else if (j === 0) {
-            moves.splice(2,1);
-          }
-          if (i === (props.height - 1)) {
-            moves.splice(1,1);
-          } else if (i === 0) {
-            moves.splice(0,1);
-          }
-
-        }
-
-        // set State Transitions
-        states_transitions.set(s, tran);
-        // set allowed moves
-        allowed_moves.set(s, moves);
-        // set initial value to zero
-        values.set(s, 0);
-      }
-    }
-
-    // Behaviour of Agent when near a wall
-    // for each wall go the states near it, and remove the action that leads to the wall
-    let neighbours = {r : null, l : null, u : null , d : null}, neighbour, action_to_remove;
-
-    for (let w of props.wallsPos) {
-      neighbours.r = w[1] === (props.width-1) ? null : [w[0], w[1]+1];
-      neighbours.l = w[1] === 0 ? null : [w[0], w[1]-1];
-      neighbours.u = w[0] === 0 ? null : [w[0]-1, w[1]];
-      neighbours.d = w[0] === (props.height-1) ? null : [w[0]+1, w[1]];
-      for (let key in neighbours ) {
-        neighbour = neighbours[key];
-        if (neighbour !== null) {
-          s = getStateFromPos(neighbour[0], neighbour[1]);
-          moves = allowed_moves.get(s);
-          if (key === 'r') {
-            action_to_remove = 'L';
-          } else if (key === 'l') {
-            action_to_remove = 'R';
-          } else if (key === 'u') {
-            action_to_remove = 'D';
-          } else if (key === 'd') {
-            action_to_remove = 'U';
-          } else {
-            action_to_remove = '';
-            console.log('key unknown !!!!');
-          }
-          if (action_to_remove.length > 0) {
-            moves.splice( moves.indexOf(action_to_remove), 1);
-          }
-        }
-      }
-    }
-
-    // Randomize initial policy, deterministic by default ( Grid is standard not windy )
-    let policy = clearPolicy(states);
-    console.log('state transitions', states_transitions);
-    console.log('allowed moves', allowed_moves)
-    console.log('policy', policy);
+    // Construct Grid and get state
+    let state = constructGrid(props.width, props.height, props.startPos, props.goalPos, props.holePos, props.wallsPos, 0);
 
     // Create some references
     this.gammaInput = React.createRef();
     this.stepCostInput = React.createRef();
     this.randomizePolicyRadio = React.createRef();
     this.uniformizePolicyRadio = React.createRef();
+    this.dimensionsRadio = React.createRef();
+    this.positionsRadio = React.createRef();
+    this.widthInput = React.createRef();
+    this.heightInput = React.createRef();
+    this.gridTable = React.createRef();
 
-    this.state = {
+
+    // Add some other state properties
+    state = {
+      ...state, 
       gridContent: 'agent',
-      states : states,
-      goalState: goalState,
-      holeState: holeState,
-      wallStates: wallStates,
-      rewards: rewards,
-      stepCost: stepCost,
-      goalReward: goalReward,
-      holeReward: holeReward,
-      statesTransitions: states_transitions, // Map: for each state S -> [['R', 0.2], ['U', 0.8]]
-      allowedMoves: allowed_moves, // Map : for each s => ['D', 'R'] allowed moves
-      policy: policy,
-      policyEditable: true,    // for the child component PolicyEditor
-      selectedState: '',       // for the child component PolicyEditor
-      selectedStatePolicy: [], // for the child component PolicyEditor
-      values: values,
       gamma: 0.9,              // Discount Factor
       windy: false,
-      currentI: props.startPos[0],
-      currentJ: props.startPos[1],
       converged: false,
-    };
+      working: false,
+      contextMenuVisible: false,
+      selectedGridState: '', // on table right click
+      tableIsEditable: false,
+    }
+
+    this.state = state;
+  }
+
+  componentWillReceiveProps(nextProps) {
+
+    let w = this.props.width, h = this.props.height;
+    let start_pos = this.props.startPos;
+    let goal_pos = this.props.goalPos;
+    let hole_pos = this.props.holePos;
+    let walls_pos = this.props.wallsPos; 
+
+    const dimensionsChanged = nextProps.width !== this.props.width || nextProps.height !== this.props.height;
+    const positionsChanged = (nextProps.startPos !== start_pos) || (nextProps.goalPos !== goal_pos) || (nextProps.holePos !== hole_pos) || (nextProps.wallsPos !== walls_pos);
+
+    if (!dimensionsChanged && !positionsChanged) {
+      return;
+    }
+
+    if (dimensionsChanged) {
+      //alert('new Dimenstions');
+      // Reconstruct Grid
+      w = parseInt(nextProps.width, 10);
+      h = parseInt(nextProps.height, 10);
+      if (isNaN(w) || isNaN(h)) {
+          return;
+      }
+    }
+    if (positionsChanged) {
+      //alert ('new Positions')
+      start_pos = nextProps.startPos;
+      goal_pos = nextProps.goalPos;
+      hole_pos = nextProps.holePos;
+      walls_pos = nextProps.wallsPos;
+    }
+
+    this.setState(constructGrid(w, h, start_pos, goal_pos, hole_pos, walls_pos, this.state.stepCost ));
+
+  }
+
+  onTableClick = (ev) => {
+    if (this.positionsRadio.current.checked) {
+      const s = ev.target.dataset.state;
+      
+      this.setState({
+        ...this.state,
+        contextMenuVisible: true,
+        selectedGridState: s
+      });
+    }
+  };
+
+
+  onContextMenuItemClick = (ev) => {
+    const action = ev.target.dataset.action;
+    let changed = false;
+    let sp = this.props.startPos, gp = this.props.goalPos, hp = this.props.holePos, wps = this.props.wallsPos;
+    switch (action) {
+      case 'start':
+        if (this.state.startState !== this.state.selectedGridState) {
+          sp = getPosFromState(this.state.selectedGridState);
+          changed = true;
+        }
+        break;
+      case 'goal':
+        if (this.state.goalState !== this.state.selectedGridState) {
+          gp = getPosFromState(this.state.selectedGridState);
+          changed = true;
+        }
+        break;
+      case 'hole':
+        if (this.state.holeState !== this.state.selectedGridState) {
+          hp = getPosFromState(this.state.selectedGridState);
+          changed = true;
+        }
+        break;
+      case 'wall':
+        if (!this.state.wallStates.includes(this.state.selectedGridState)) {
+          let newWall = getPosFromState(this.state.selectedGridState);
+          wps = Array.from(wps);
+          wps.push(newWall);
+          changed = true;
+        }
+        break;
+      case 'unwall':
+        if (this.state.wallStates.includes(this.state.selectedGridState)) {
+          const pos_to_unwall = getPosFromState(this.state.selectedGridState);
+          wps = wps.filter(e => !(e[0] === pos_to_unwall[0] && e[1] === pos_to_unwall[1]));
+          changed = true;
+        }
+        break;
+      default:
+        break;
+    }
+    if (changed) {
+      this.props.changePosFunc(sp, gp, hp, wps);
+    }
+    this.setState({
+      ...this.state,
+      contextMenuVisible: false,
+      selectedGridState: '',
+    })
   }
 
   getCurrentState = () => {
@@ -204,21 +199,51 @@ class Grid extends Component {
   }
 
   gridTypeOptionChange = (ev) => {
-    const permitted_vals = ['standard', 'windy'];
     let new_states_transitions;
-    if (permitted_vals.includes(ev.target.value)) {
+    if (ev.target.name === 'grid-type') {
       if (ev.target.value === 'standard') {
-        new_states_transitions = setStatesTransitionsToDeterministic(this.state.statesTransitions);
+          new_states_transitions = setStatesTransitionsToDeterministic(this.state.statesTransitions);
+      } else if (ev.target.value === 'windy') {
+          new_states_transitions = setStatesTransitionsToWindy(this.state.statesTransitions, this.state.policy);
       } else {
-        new_states_transitions = setStatesTransitionsToWindy(this.state.statesTransitions, this.state.policy);
+        return;
       }
       this.setState({
         ...this.state,
         windy: ev.target.value === 'windy',
         statesTransitions: new_states_transitions,
       });
+    } else if (ev.target.name === 'grid-edit') {
+      if (ev.target.value === 'positions') {
+        this.gridTable.current.addEventListener('click', this.onTableClick);
+        this.setState({
+          ...this.state,
+          tableIsEditable: true,
+        });
+      } else {
+        this.gridTable.current.removeEventListener('click', this.onTableClick);
+        this.setState({
+          ...this.state,
+          tableIsEditable: false,
+        });
+      }
     }
-    console.log('state transitions', new_states_transitions)
+  }
+
+  onDimInputFocus = (ev) => {
+    this.dimensionsRadio.current.click();
+  }
+
+  onDimInputChange = (ev) => {
+    const permitted_vals = ['width', 'height'];
+    if (permitted_vals.includes(ev.target.name)) {
+      let new_val = parseInt(ev.target.value, 10);
+      if (!isNaN(new_val))  {
+        let w = parseInt(this.widthInput.current.value, 10);
+        let h = parseInt(this.heightInput.current.value, 10);
+        this.props.changeDimFunc(w,h);
+      }
+    }
   }
 
   policyTypeOptionChange = (ev) => {
@@ -281,14 +306,6 @@ class Grid extends Component {
     }
   };
 
-
-  gridStateClick = (ev) => {
-  };
-
-  // what to do when editing policy of a state from policy editor is done
-  onSavePolicy = (newPolicy) => {
-  };
-
   evaluatePolicyClick = async (ev) => {
 
     // reinitialize V(s) to zero
@@ -297,6 +314,7 @@ class Grid extends Component {
       values: initValuesToZero(this.state.values),
       gamma:  parseFloat(this.gammaInput.current.value), // get Gamma from input
       converged: false,
+      working: true,
     });
     await sleep(200);
     
@@ -353,6 +371,11 @@ class Grid extends Component {
           if (delta < threshold) {
             console.info('policy evaluation has converged !');
             this.props.addAction(null, `(Policy Evaluation Converged ! (${pol_ev_count} iterations))`, 'string', 0);
+            this.setState({
+              ...this.state,
+              converged: true,
+              working: false,
+            });
             break;
           }
         }
@@ -375,6 +398,7 @@ class Grid extends Component {
       //values: randomizeValues(this.state.values, [this.state.goalState, this.state.holeState, ...this.state.wallStates]),
       gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
       converged: false,
+      working: true,
     });
     await sleep(200);
 
@@ -538,7 +562,8 @@ class Grid extends Component {
         this.props.addAction(`Policy Iteration Converged ! ${pol_iteration_count} Iterations with respectively ${pol_ev_counts} Policy Evaluation Iterations each`, null, null, 0);
         this.setState({
           ...this.state,
-          converged: true
+          converged: true,
+          working: false
         });
         break;
       }
@@ -560,6 +585,7 @@ class Grid extends Component {
       //values: randomizeValues(this.state.values, [this.state.goalState, this.state.holeState, ...this.state.wallStates]),
       gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
       converged: false,
+      working: true,
     });
     await sleep(200);
 
@@ -571,6 +597,7 @@ class Grid extends Component {
     // First Step
     console.log('Starting First Step');
     this.props.addAction(null, '(Step 1 Start !)', 'string', 0);
+    this.props.addAction(null, this.state.policy, '2D', 0);
   
     let old_val, v, new_val, delta, new_values_map , threshold = 1e-3;
     let new_a,  best_val;
@@ -579,6 +606,7 @@ class Grid extends Component {
     while (true) {
       step_one_count += 1;
       new_values_map = new Map(this.state.values);
+      this.props.addAction(null, this.state.values, '2D', 0);
       delta = 0;
       for (let s of this.state.states) {
         state_transitions = this.state.statesTransitions.get(s);
@@ -690,11 +718,13 @@ class Grid extends Component {
     }
 
     this.props.addAction(`Value Iteration Converged ! ${step_one_count} Iterations in First Step`, null, null, 0);
+    this.props.addAction(null, new_policy_map, '2D', 0);
     this.setState({
       ...this.state,
       policy: new_policy_map,
       statesTransitions: new_states_transitions_map,
       converged: true,
+      working: false
     });
     await sleep(200);
   
@@ -732,7 +762,7 @@ class Grid extends Component {
         <td key={s}
             className={`${i+1 === this.props.height ? 'last-row' : ''} \
                         ${j === 0 ? 'first-col' : ''} \
-                        ${this.state.policyEditable && !isStartPos && !isGoalPos && !isHolePos && !isWallPos ? 'editable' : ''}
+                        ${this.state.tableIsEditable && this.state.selectedGridState === s ? 'selected' : ''}
                         ${i === this.state.currentI    && j === this.state.currentJ ? 'current' : ''} \
                         ${isStartPos ? 'start' : ''} \
                         ${isGoalPos  ? 'goal' : ''} \
@@ -770,7 +800,7 @@ class Grid extends Component {
           </div>
           <div className="options grid" hidden={this.state.gridContent!=='agent'}>
             <div className="radio">
-                <p>Grid Type</p>
+                <p>Grid Properties</p>
             </div>
             <div className="radio">
                 <input type="radio" value="standard" name="grid-type" onChange={this.gridTypeOptionChange} defaultChecked={true}/>
@@ -779,6 +809,15 @@ class Grid extends Component {
             <div className="radio">
                 <input type="radio" value="windy" name="grid-type" onChange={this.gridTypeOptionChange}/>
                 <label>Windy</label>
+            </div>
+            <div className="radio">
+                <input ref={this.dimensionsRadio} type="radio" value="dimensions" name="grid-edit" onChange={this.gridTypeOptionChange}/>
+                <label>Dimensions </label>
+                ( <input ref={this.widthInput} type="text" name="width" onChange={this.onDimInputChange} className="small-input" defaultValue={this.props.width} onFocus={this.onDimInputFocus} /> x <input ref={this.heightInput} type="text" name="height" onChange={this.onDimInputChange} className="small-input" defaultValue={this.props.height} onFocus={this.onDimInputFocus} /> )
+            </div>
+            <div className="radio">
+                <input ref={this.positionsRadio} type="radio" value="positions" name="grid-edit" onChange={this.gridTypeOptionChange}/>
+                <label>Positions</label>
             </div>
           </div>
           <div className="options rewards" hidden={this.state.gridContent!=='rewards'} >
@@ -823,15 +862,29 @@ class Grid extends Component {
           <button onClick={this.policyIterationClick} className="action-btn">Policy Iteration</button>
           <button onClick={this.valueIterationClick}  className="action-btn">Value Iteration</button>
         </div>
-        <div>
-          <table className={`${this.state.gridContent} ${this.state.windy ? 'windy' : ''}`}>
-            <tbody>
-              {rows}
-            </tbody>
-          </table>
+        <div className="table-wrapper">
+          <div className="status">
+            <h4 id="converged" hidden={!this.state.converged}>CONVERGED !</h4>
+            <h4 id="working" hidden={!this.state.working}>WORKING</h4>
+          </div>
+          <div>
+            <table ref={this.gridTable} className={`${this.state.gridContent} ${this.state.windy ? 'windy' : ''} ${this.state.converged ? 'converged' : ''} ${this.state.working ? 'working' : ''} ${this.state.tableIsEditable ? 'editable' : ''}`}>
+              <tbody>
+                {rows}
+              </tbody>
+            </table>
+            <button id="show-logs-btn" onClick={this.props.showLoggerFunc}>Show Logs</button>
+          </div>
+          <div className="context-menu" hidden={!this.state.contextMenuVisible}>
+              <div className="item start" data-action="start"  onClick={this.onContextMenuItemClick}>Set as Start</div>
+              <div className="item goal" data-action="goal"  onClick={this.onContextMenuItemClick}>Set as Goal</div>
+              <div className="item hole" data-action="hole"  onClick={this.onContextMenuItemClick}>Set as Hole</div>
+              <div className="item wall" data-action="wall"  onClick={this.onContextMenuItemClick}>Set as Wall</div>
+              <div className="item unwall" data-action="unwall" onClick={this.onContextMenuItemClick}>Remove Wall</div>
+              <div className="item cancel" data-action="cancel" onClick={this.onContextMenuItemClick}>Cancel</div>
         </div>
-        <PolicyEditor policy={this.state.selectedStatePolicy} onSavePolicy={this.onSavePolicy} />
-        <h2 id="converged" hidden={!this.state.converged}>CONVERGED !</h2>
+        </div>
+
       </div>
     );
   }
