@@ -193,6 +193,8 @@ class Grid extends Component {
       this.setState({
         ...this.state,
         gridContent: v,
+        contextMenuVisible: false,
+        selectedGridState: '',
       });
     } else {
       alert('Unknown Mode clicked');
@@ -220,12 +222,16 @@ class Grid extends Component {
         this.setState({
           ...this.state,
           tableIsEditable: true,
+          contextMenuVisible: false,
+          selectedGridState: '',
         });
       } else {
         this.gridTable.current.removeEventListener('click', this.onTableClick);
         this.setState({
           ...this.state,
           tableIsEditable: false,
+          contextMenuVisible: false,
+          selectedGridState: '',
         });
       }
     }
