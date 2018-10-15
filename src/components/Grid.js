@@ -29,6 +29,7 @@ class Grid extends Component {
     this.widthInput = React.createRef();
     this.heightInput = React.createRef();
     this.gridTable = React.createRef();
+    this.evaluatePolicyBtn = React.createRef();
 
 
     // Add some other state properties
@@ -259,6 +260,7 @@ class Grid extends Component {
         statesTransitions: new_states_transitions,
         converged: false,
       });
+      this.evaluatePolicyBtn.current.hidden = false;
     } else if (v === 'random') {
       new_pol = randomizePolicy(this.state.allowedMoves);
       if (this.state.windy) {
@@ -272,6 +274,7 @@ class Grid extends Component {
         statesTransitions: new_states_transitions,
         converged: false,
       });
+      this.evaluatePolicyBtn.current.hidden = true;
     }
     console.log('state transitions', new_states_transitions)
   }
@@ -858,7 +861,7 @@ class Grid extends Component {
             <input className="small-input" ref={this.gammaInput} type="text" defaultValue={this.state.gamma} />
           </div>
         <div className="actions">
-          <button onClick={this.evaluatePolicyClick}  className="action-btn">Evaluate Policy</button>
+          <button ref={this.evaluatePolicyBtn} onClick={this.evaluatePolicyClick}  className="action-btn">Evaluate Policy</button>
           <button onClick={this.policyIterationClick} className="action-btn">Policy Iteration</button>
           <button onClick={this.valueIterationClick}  className="action-btn">Value Iteration</button>
         </div>
