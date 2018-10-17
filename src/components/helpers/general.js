@@ -33,9 +33,19 @@ export const randomizeValues = (values_map, zero_states) => {
     return newVals;
 };
 
+export const getRandomState = (states, not_allowed_states) => {
+  let random_state;
+
+  do {
+    random_state = states[Math.floor(Math.random() * states.length)];
+  } while (not_allowed_states.includes(random_state))
+
+  return random_state;
+}
+
 export const constructGrid = (width, height, startPos, goalPos, holePos, wallsPos, stepCost) => {
     console.log('Constructing Grid');
-              // construct list of all states (grid[1][2] => encoded as string '12' )
+      // construct list of all states (grid[1][2] => encoded as string '12' )
       // IMPORTANT: will work for now with max 10x10 grid, meaning that state will be 2 charachters ('99')
       // construct map of rewards (s->reward)
       let states = [], rewards = new Map(), states_transitions = new Map(), values = new Map(), allowed_moves = new Map();
@@ -149,6 +159,9 @@ export const constructGrid = (width, height, startPos, goalPos, holePos, wallsPo
         goalState: goalState,
         holeState: holeState,
         wallStates: wallStates,
+        currentI: startPos[0],
+        currentJ: startPos[1],
+        currentState: getStateFromPos(startPos[0], startPos[1]),
         rewards: rewards,
         goalReward: goalReward,
         holeReward: holeReward,
@@ -156,8 +169,6 @@ export const constructGrid = (width, height, startPos, goalPos, holePos, wallsPo
         allowedMoves: allowed_moves, // Map : for each s => ['D', 'R'] allowed moves
         policy: policy,
         values: values,
-        currentI: startPos[0],
-        currentJ: startPos[1],
         stepCost: stepCost,
       };
       return ret_state;

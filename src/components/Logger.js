@@ -19,7 +19,6 @@ class Logger extends Component {
 
     componentWillReceiveProps (nextProps) {
         let lastActionHTML;
-        console.log(nextProps);
         if (nextProps.reset) {
             this.setState({
                 ...this.state, 

@@ -5,7 +5,7 @@ import { connect } from "react-redux";
 import '../styles/Grid.css';
 
 import {setRewards} from './helpers/rewards';
-import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues} from './helpers/general';
+import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues, getRandomState} from './helpers/general';
 import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy, editSingleStatePolicy } from './helpers/policy';
 import { bellman_loop_actions, bellman_single_action } from './helpers/algorithms';
 import { addAction, resetAction } from '../redux/actions';
@@ -42,7 +42,7 @@ class Grid extends Component {
       converged: false,
       working: false,
       contextMenuVisible: false,
-      selectedGridState: '', // on table right click
+      selectedGridState: '',   // Selected Cell on Table when editing
       tableIsEditable: false, // Positions of Goals and States
       policyEditable: false, // Customize policy
       algorithms: 'dynamicprogramming' // to control which buttons appear (DP, MC ...)
@@ -177,7 +177,7 @@ class Grid extends Component {
     return getStateFromPos(this.state.currentI, this.state.currentJ);
   }
 
-  // returns state
+  // returns next state
   moveAgent = (action, changeCurrentPos=true, from_pos=[this.state.currentI, this.state.currentJ]) => { 
     let newPos = [];
     if (from_pos.length !== 2) {
@@ -206,7 +206,8 @@ class Grid extends Component {
       this.setState({
         ...this.state,
         currentI: newPos[0],
-        currentJ: newPos[1]
+        currentJ: newPos[1],
+        currentState: getStateFromPos(newPos[0], newPos[1]),
       });
     }
     return newPos.length === 2 ? getStateFromPos(newPos[0], newPos[1]) : null;
@@ -332,7 +333,6 @@ class Grid extends Component {
         selectedGridState: '',
         converged: false,
       });
-      this.evaluatePolicyBtn.current.hidden = false;
     } else if (v === 'random') {
       new_pol = randomizePolicy(this.state.allowedMoves);
       if (this.state.windy) {
@@ -349,7 +349,6 @@ class Grid extends Component {
         selectedGridState: '',
         converged: false,
       });
-      this.evaluatePolicyBtn.current.hidden = true;
     } else if (v === 'custom') {
       this.setState({
         ...this.state,
@@ -358,7 +357,6 @@ class Grid extends Component {
         selectedGridState: '',
       });
       this.gridTable.current.addEventListener('click', this.onTableClick);
-      this.evaluatePolicyBtn.current.hidden = false;
     }
     console.log('state transitions', new_states_transitions)
   }
@@ -797,8 +795,113 @@ class Grid extends Component {
   
   }
 
-  monteCarloPredictionClick = (ev) => {
-    alert('monte carlo prediction');
+  monteCarloPredictionClick = async (ev) => {
+
+    this.setState({
+      ...this.state,
+      values: initValuesToZero(this.state.values),
+      gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
+      converged: false,
+      working: true,
+    });
+    await sleep(200);
+
+    const NBR_EPISODES = 50;
+    let game_over = false, action, next_state, reward;
+    let states_rewards, states_returns, states_all_returns = new Map(), seen_states,  init_state, init_pos, first_iteration;
+    let G, s, ret, j;
+    let log_str;
+    let sum_rewards;
+    for (let i = 0 ; i < NBR_EPISODES ; i++) {
+
+      // Begining of each episode set the agent position to a random position
+      init_state = getRandomState(this.state.states, [this.state.goalState, this.state.holeState, ...this.state.wallStates]);
+      init_pos = getPosFromState(init_state);
+      log_str = `Start Episode ${i} : (Start State ${init_state})`;
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 0);
+
+      this.setState({
+        ...this.state,
+        currentI: init_pos[0],
+        currentJ: init_pos[1],
+        currentState: init_state,
+      });
+      await sleep(200);
+
+      // Play the Episode and store list of states and their rewards
+      game_over = false;
+      states_rewards = [[this.state.currentState, 0]];
+      while (!game_over) {
+        action = this.state.policy.get(this.state.currentState);
+        next_state = this.moveAgent(action, true, [this.state.currentI, this.state.currentJ]);
+        await sleep(100);
+        reward = this.state.rewards.get(next_state);
+        states_rewards.push([next_state, reward]);
+        game_over = this.state.currentState === this.state.goalState || this.state.currentState === this.state.holeState;
+      }
+      log_str = `Visited States : `;
+      for (let e of states_rewards) {
+        log_str += ` (${e[0]},${e[1]}) `;
+      }
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 1);
+
+      // Loop through the list of states-rewards backward and compute the Returns
+      states_rewards.reverse();
+      states_returns = [];
+      first_iteration = true;
+      G = 0;
+      sum_rewards = 0;
+      j = 0;
+      for (let e of states_rewards) {
+        s = e[0]; 
+        reward = e[1];
+        if (first_iteration) { // last terminal state (G = 0)
+          first_iteration = false;
+        } else {
+          G = sum_rewards * (this.state.gamma**j);
+          states_returns.push([s, G]);
+          j++;
+          console.log(`G = ${G}`);
+        }
+        sum_rewards += reward;
+      }
+
+      // Take the states_returns and save all returns of each state
+      seen_states = [];
+      for (let e of states_returns) {
+        s = e[0];
+        ret = e[1];
+        if (!seen_states.includes(s)) {
+          seen_states.push(s);
+          if (states_all_returns.has(s)) {
+            states_all_returns.get(s).push(ret);
+          } else {
+            states_all_returns.set(s, [ret]);
+          }
+        }
+      }
+
+    }
+
+
+    let new_values = new Map(this.state.values);
+    let new_v;
+    const sum_reducer = (acc, val) => acc + val;
+    for (let [s, rets] of states_all_returns) {
+      console.log(s + ' ' + rets);
+      new_v = rets.reduce(sum_reducer) / rets.length;
+      new_values.set(s, new_v);
+    }
+
+    this.setState({
+      ...this.state,
+      values: new_values,
+      converged: true,
+      working: false,
+    });
+
   }
 
   monteCarloControlClick = (ev) => {
