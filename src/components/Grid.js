@@ -45,6 +45,7 @@ class Grid extends Component {
       selectedGridState: '', // on table right click
       tableIsEditable: false, // Positions of Goals and States
       policyEditable: false, // Customize policy
+      algorithms: 'dynamicprogramming' // to control which buttons appear (DP, MC ...)
     }
 
     this.state = state;
@@ -360,6 +361,16 @@ class Grid extends Component {
       this.evaluatePolicyBtn.current.hidden = false;
     }
     console.log('state transitions', new_states_transitions)
+  }
+
+
+  onAlgorithmsRadioChange = (ev) => {
+    if (ev.target.value === 'dynamicprogramming' || ev.target.value === 'montecarlo') {
+      this.setState({
+        ...this.state,
+        algorithms: ev.target.value,
+      });
+    }
   }
 
   evaluatePolicyClick = async (ev) => {
@@ -786,6 +797,14 @@ class Grid extends Component {
   
   }
 
+  monteCarloPredictionClick = (ev) => {
+    alert('monte carlo prediction');
+  }
+
+  monteCarloControlClick = (ev) => {
+    alert('monte carlo control');
+  }
+
 
   render() {
     console.log('render grid');
@@ -911,9 +930,23 @@ class Grid extends Component {
             <input className="small-input" ref={this.gammaInput} type="text" defaultValue={this.state.gamma} />
           </div>
         <div className="actions">
-          <button ref={this.evaluatePolicyBtn} onClick={this.evaluatePolicyClick}  className="action-btn">Evaluate Policy</button>
-          <button onClick={this.policyIterationClick} className="action-btn">Policy Iteration</button>
-          <button onClick={this.valueIterationClick}  className="action-btn">Value Iteration</button>
+          <div className="options algorithms">
+              <div className="radio">
+                <input type="radio" value="dynamicprogramming" name="algorithms" defaultChecked={true} onChange={this.onAlgorithmsRadioChange}/>
+                <label>Dynamic Programming</label>
+              </div>
+              <div className="radio">
+                <input type="radio" value="montecarlo" name="algorithms" onChange={this.onAlgorithmsRadioChange} />
+                <label>Monte Carlo</label>
+              </div>
+          </div>
+          <div>
+            <button ref={this.evaluatePolicyBtn} onClick={this.evaluatePolicyClick}  className="action-btn" hidden={this.state.algorithms !=='dynamicprogramming'}>Evaluate Policy</button>
+            <button onClick={this.policyIterationClick} className="action-btn" hidden={this.state.algorithms !=='dynamicprogramming'}>Policy Iteration</button>
+            <button onClick={this.valueIterationClick}  className="action-btn" hidden={this.state.algorithms !=='dynamicprogramming'}>Value Iteration</button>
+            <button onClick={this.monteCarloPredictionClick}  className="action-btn" hidden={this.state.algorithms !=='montecarlo'}>Monte Carlo Prediction</button>
+            <button onClick={this.monteCarloControlClick}  className="action-btn" hidden={this.state.algorithms !=='montecarlo'}>Monte Carlo Control</button>
+          </div>
         </div>
         <div className="table-wrapper">
           <div className="status">
