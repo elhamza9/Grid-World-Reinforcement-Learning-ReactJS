@@ -43,6 +43,10 @@
     background-position: center;
 }
 
+.Grid table.editable {
+    border: 3px solid orange;
+}
+
 .Grid table.converged {
     border: 3px solid blue;
 }
@@ -64,10 +68,13 @@
     cursor: pointer;
 }
 
-.Grid table.editable td:hover, .Grid table.editable td.selected {
-    background-color: orange;
+.Grid table.editable td.selected {
+    background-color: orange !important;
 }
 
+.Grid table.editable td:hover {
+    background-color: moccasin;
+}
 
 
 .Grid table.policies td {

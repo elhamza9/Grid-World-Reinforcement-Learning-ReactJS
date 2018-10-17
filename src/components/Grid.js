@@ -6,7 +6,7 @@ import '../styles/Grid.css';
 
 import {setRewards} from './helpers/rewards';
 import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues} from './helpers/general';
-import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy } from './helpers/policy';
+import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy, editSingleStatePolicy } from './helpers/policy';
 import { bellman_loop_actions, bellman_single_action } from './helpers/algorithms';
 import { addAction, resetAction } from '../redux/actions';
 
@@ -26,6 +26,7 @@ class Grid extends Component {
     this.uniformizePolicyRadio = React.createRef();
     this.dimensionsRadio = React.createRef();
     this.positionsRadio = React.createRef();
+    this.customizePolicyRadio = React.createRef();
     this.widthInput = React.createRef();
     this.heightInput = React.createRef();
     this.gridTable = React.createRef();
@@ -42,7 +43,8 @@ class Grid extends Component {
       working: false,
       contextMenuVisible: false,
       selectedGridState: '', // on table right click
-      tableIsEditable: false,
+      tableIsEditable: false, // Positions of Goals and States
+      policyEditable: false, // Customize policy
     }
 
     this.state = state;
@@ -85,17 +87,39 @@ class Grid extends Component {
   }
 
   onTableClick = (ev) => {
-    if (this.positionsRadio.current.checked) {
+    if (this.positionsRadio.current.checked || this.customizePolicyRadio.current.checked) {
       const s = ev.target.dataset.state;
       
       this.setState({
         ...this.state,
-        contextMenuVisible: true,
+        contextMenuVisible: this.state.tableIsEditable && !this.state.policyEditable ? true : false,
         selectedGridState: s
       });
+
+      if (this.state.policyEditable) {
+        document.addEventListener('keypress', this.onDocumentKeyPress);
+      }
+
     }
   };
 
+  onDocumentKeyPress = (ev) => {
+    const codes_to_actions_map = new Map();
+    codes_to_actions_map.set(114, 'R'); // R
+    codes_to_actions_map.set(108, 'L'); // L
+    codes_to_actions_map.set(117, 'U'); // U
+    codes_to_actions_map.set(100, 'D'); // D
+    //alert('key ' + ev.keyCode);
+    const keyPressedIsPermitted = codes_to_actions_map.has(ev.keyCode);
+    const selectedStateIsNormal = this.state.selectedGridState !== this.state.goalState && this.state.selectedGridState !== this.state.holeState && !this.state.wallStates.includes(this.state.selectedGridState);
+    if (keyPressedIsPermitted && selectedStateIsNormal) {
+      const newPol = editSingleStatePolicy(this.state.policy, this.state.allowedMoves, this.state.selectedGridState, codes_to_actions_map.get(ev.keyCode))
+      this.setState({
+        ...this.state,
+        policy: newPol
+      })
+    }
+  }
 
   onContextMenuItemClick = (ev) => {
     const action = ev.target.dataset.action;
@@ -145,7 +169,7 @@ class Grid extends Component {
       ...this.state,
       contextMenuVisible: false,
       selectedGridState: '',
-    })
+    });
   }
 
   getCurrentState = () => {
@@ -194,6 +218,8 @@ class Grid extends Component {
         ...this.state,
         gridContent: v,
         contextMenuVisible: false,
+        tableIsEditable: false,
+        policyEditable: false,
         selectedGridState: '',
       });
     } else {
@@ -215,6 +241,8 @@ class Grid extends Component {
         ...this.state,
         windy: ev.target.value === 'windy',
         statesTransitions: new_states_transitions,
+        tableIsEditable: false,
+        policyEditable: false,
       });
     } else if (ev.target.name === 'grid-edit') {
       if (ev.target.value === 'positions') {
@@ -222,6 +250,7 @@ class Grid extends Component {
         this.setState({
           ...this.state,
           tableIsEditable: true,
+          policyEditable: false,
           contextMenuVisible: false,
           selectedGridState: '',
         });
@@ -230,6 +259,7 @@ class Grid extends Component {
         this.setState({
           ...this.state,
           tableIsEditable: false,
+          policyEditable: false,
           contextMenuVisible: false,
           selectedGridState: '',
         });
@@ -251,38 +281,6 @@ class Grid extends Component {
         this.props.changeDimFunc(w,h);
       }
     }
-  }
-
-  policyTypeOptionChange = (ev) => {
-    let v = ev.target.value;
-    let new_pol;
-    let new_states_transitions;
-    if (v === 'uniform') {
-      new_pol = clearPolicy(this.state.states);
-      new_states_transitions = setStatesTransitionsToUniform(this.state.statesTransitions, this.state.allowedMoves);
-      this.setState({
-        ...this.state,
-        policy: new_pol,
-        statesTransitions: new_states_transitions,
-        converged: false,
-      });
-      this.evaluatePolicyBtn.current.hidden = false;
-    } else if (v === 'random') {
-      new_pol = randomizePolicy(this.state.allowedMoves);
-      if (this.state.windy) {
-        new_states_transitions = setStatesTransitionsToWindy(this.state.statesTransitions, new_pol);
-      } else {
-        new_states_transitions = setStatesTransitionsToDeterministic(this.state.statesTransitions);
-      }
-      this.setState({
-        ...this.state,
-        policy: new_pol,
-        statesTransitions: new_states_transitions,
-        converged: false,
-      });
-      this.evaluatePolicyBtn.current.hidden = true;
-    }
-    console.log('state transitions', new_states_transitions)
   }
 
   rewardTypeOptionChange = (ev) => {
@@ -314,6 +312,55 @@ class Grid extends Component {
       });
     }
   };
+
+  policyTypeOptionChange = (ev) => {
+    let v = ev.target.value;
+    let new_pol;
+    let new_states_transitions;
+    document.removeEventListener('keypress', this.onDocumentKeyPress);
+    this.gridTable.current.removeEventListener('click', this.onTableClick);
+    if (v === 'uniform') {
+      new_pol = clearPolicy(this.state.states);
+      new_states_transitions = setStatesTransitionsToUniform(this.state.statesTransitions, this.state.allowedMoves);
+      this.setState({
+        ...this.state,
+        policy: new_pol,
+        statesTransitions: new_states_transitions,
+        tableIsEditable: false,
+        policyEditable: false,
+        selectedGridState: '',
+        converged: false,
+      });
+      this.evaluatePolicyBtn.current.hidden = false;
+    } else if (v === 'random') {
+      new_pol = randomizePolicy(this.state.allowedMoves);
+      if (this.state.windy) {
+        new_states_transitions = setStatesTransitionsToWindy(this.state.statesTransitions, new_pol);
+      } else {
+        new_states_transitions = setStatesTransitionsToDeterministic(this.state.statesTransitions);
+      }
+      this.setState({
+        ...this.state,
+        policy: new_pol,
+        statesTransitions: new_states_transitions,
+        tableIsEditable: false,
+        policyEditable: false,
+        selectedGridState: '',
+        converged: false,
+      });
+      this.evaluatePolicyBtn.current.hidden = true;
+    } else if (v === 'custom') {
+      this.setState({
+        ...this.state,
+        tableIsEditable: true,
+        policyEditable: true,
+        selectedGridState: '',
+      });
+      this.gridTable.current.addEventListener('click', this.onTableClick);
+      this.evaluatePolicyBtn.current.hidden = false;
+    }
+    console.log('state transitions', new_states_transitions)
+  }
 
   evaluatePolicyClick = async (ev) => {
 
@@ -777,8 +824,7 @@ class Grid extends Component {
                         ${isGoalPos  ? 'goal' : ''} \
                         ${isHolePos  ? 'hole' : ''} \
                         ${isWallPos  ? 'wall' : ''} `}
-                        data-state={s}
-                        onClick={this.gridStateClick}>
+                        data-state={s} >
             {val}
         </td>);
       }
@@ -855,12 +901,10 @@ class Grid extends Component {
                 <input ref={this.randomizePolicyRadio} type="radio" value="random" name="policy" onChange={this.policyTypeOptionChange} />
                 <label>Randomize</label>
               </div>
-              {/*
               <div className="radio">
-                <input type="radio" value="custom" name="policy" onChange={this.policyOptionChange} />
-                <label>Custom</label>
+                <input ref={this.customizePolicyRadio} type="radio" value="custom" name="policy" onChange={this.policyTypeOptionChange} />
+                <label>Customize</label>
               </div>
-              */}
           </div>
           <div className="options gamma">
             <label>Discount Factor (gamma) : </label>
@@ -877,7 +921,7 @@ class Grid extends Component {
             <h4 id="working" hidden={!this.state.working}>WORKING</h4>
           </div>
           <div>
-            <table ref={this.gridTable} className={`${this.state.gridContent} ${this.state.windy ? 'windy' : ''} ${this.state.converged ? 'converged' : ''} ${this.state.working ? 'working' : ''} ${this.state.tableIsEditable ? 'editable' : ''}`}>
+            <table ref={this.gridTable} onFocus={this.onGridTableFocus} className={`${this.state.gridContent} ${this.state.windy ? 'windy' : ''} ${this.state.converged ? 'converged' : ''} ${this.state.working ? 'working' : ''} ${this.state.tableIsEditable ? 'editable' : ''}`}>
               <tbody>
                 {rows}
               </tbody>

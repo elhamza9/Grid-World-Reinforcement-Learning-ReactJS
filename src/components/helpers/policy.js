@@ -20,6 +20,14 @@ export const clearPolicy = (states) => {
     return policy;
 };
 
+export const editSingleStatePolicy = (policy, allowed_moves, state_to_change, new_action) => {
+    let newPol = new Map(policy);
+    if (allowed_moves.get(state_to_change).includes(new_action)) {
+        newPol.set(state_to_change, new_action);
+    }
+    return newPol;
+}
+
 export const setStatesTransitionsToUniform = (states_transitions_map, allowed_moves_map) => {
     let new_states_transitions_map = new Map();
     let nbr_possible_actions, pr, st, new_st, moves;
