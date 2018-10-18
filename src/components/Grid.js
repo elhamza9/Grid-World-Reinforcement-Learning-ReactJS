@@ -31,6 +31,7 @@ class Grid extends Component {
     this.heightInput = React.createRef();
     this.gridTable = React.createRef();
     this.evaluatePolicyBtn = React.createRef();
+    this.nbrEpisodesInput = React.createRef();
 
 
     // Add some other state properties
@@ -809,7 +810,7 @@ class Grid extends Component {
     // Reset Log
     this.props.resetAction();
 
-    const NBR_EPISODES = 2000;
+    const NBR_EPISODES = parseInt(this.nbrEpisodesInput.current.value, 10);
     let game_over = false, action, next_state, reward;
     let states_rewards, states_returns, states_all_returns = new Map(), seen_states,  init_state, init_pos, first_iteration;
     let G, s, ret, j;
@@ -1061,12 +1062,18 @@ class Grid extends Component {
                 <label>Monte Carlo</label>
               </div>
           </div>
-          <div>
-            <button ref={this.evaluatePolicyBtn} onClick={this.evaluatePolicyClick}  className="action-btn" hidden={this.state.algorithms !=='dynamicprogramming'}>Evaluate Policy</button>
-            <button onClick={this.policyIterationClick} className="action-btn" hidden={this.state.algorithms !=='dynamicprogramming'}>Policy Iteration</button>
-            <button onClick={this.valueIterationClick}  className="action-btn" hidden={this.state.algorithms !=='dynamicprogramming'}>Value Iteration</button>
-            <button onClick={this.monteCarloPredictionClick}  className="action-btn" hidden={this.state.algorithms !=='montecarlo'}>Monte Carlo Prediction</button>
-            <button onClick={this.monteCarloControlClick}  className="action-btn" hidden={this.state.algorithms !=='montecarlo'}>Monte Carlo Control</button>
+          <div className="options">
+            <div className="actions-option" hidden={this.state.algorithms !=='dynamicprogramming'}>
+              <button ref={this.evaluatePolicyBtn} onClick={this.evaluatePolicyClick}  className="action-btn">Evaluate Policy</button>
+              <button onClick={this.policyIterationClick} className="action-btn" >Policy Iteration</button>
+              <button onClick={this.valueIterationClick}  className="action-btn" >Value Iteration</button>
+            </div>
+            <div className="actions-option" hidden={this.state.algorithms !== 'montecarlo'}>
+              <button onClick={this.monteCarloPredictionClick}  className="action-btn" >Monte Carlo Prediction</button>
+              <label>Nbr of Episodes </label>
+              <input ref={this.nbrEpisodesInput} className="small-input" type="text" defaultValue="100" />
+              <button onClick={this.monteCarloControlClick}  className="action-btn">Monte Carlo Control</button>
+            </div>
           </div>
         </div>
         <div className="table-wrapper">

@@ -9,7 +9,11 @@
   
 .Grid .options .radio {
     display: inline-block;
-    margin-right: 20px;
+    margin: 0 10px;
+}
+
+.Grid .options .actions-option {
+    margin: 0 10px;
 }
 
 .Grid .small-input {
@@ -33,7 +37,6 @@
 
 .Grid table {
     margin: 10px auto;
-
 }
 
 .Grid table.windy {
@@ -92,7 +95,6 @@
 
 .Grid td.last-row {
     border-bottom: 1px solid black;
-    
 }
 
 .Grid td.current {
@@ -123,7 +125,6 @@
     align-items: center;
     justify-content: center;
     position: relative;
-
 }
 
 .Grid #converged {
