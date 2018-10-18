@@ -805,8 +805,11 @@ class Grid extends Component {
       working: true,
     });
     await sleep(200);
+  
+    // Reset Log
+    this.props.resetAction();
 
-    const NBR_EPISODES = 50;
+    const NBR_EPISODES = 2000;
     let game_over = false, action, next_state, reward;
     let states_rewards, states_returns, states_all_returns = new Map(), seen_states,  init_state, init_pos, first_iteration;
     let G, s, ret, j;
@@ -834,7 +837,21 @@ class Grid extends Component {
       states_rewards = [[this.state.currentState, 0]];
       while (!game_over) {
         action = this.state.policy.get(this.state.currentState);
-        next_state = this.moveAgent(action, true, [this.state.currentI, this.state.currentJ]);
+        if (this.state.windy) {
+          // another action than the one chosen can occur with pr 0.5/3
+          if (Math.random() >= 0.5) {
+              let all_actions = ['R','L','D','U'];
+              all_actions.splice(all_actions.indexOf(action), 1);
+              action = all_actions[Math.floor(Math.random()*all_actions.length)];
+              //alert(`Random action for state ${this.state.currentState} : ${action}`)
+          }
+        }
+        if (this.state.allowedMoves.get(this.state.currentState).includes(action)) {
+          next_state = this.moveAgent(action, true, [this.state.currentI, this.state.currentJ]);
+        } else {
+          //alert('Stays in current state');
+          next_state = this.state.currentState;
+        }
         await sleep(100);
         reward = this.state.rewards.get(next_state);
         states_rewards.push([next_state, reward]);
@@ -863,12 +880,11 @@ class Grid extends Component {
           G = sum_rewards * (this.state.gamma**j);
           states_returns.push([s, G]);
           j++;
-          console.log(`G = ${G}`);
         }
         sum_rewards += reward;
       }
 
-      // Take the states_returns and save all returns of each state
+      // Take the states_returns and store all returns of each state
       seen_states = [];
       for (let e of states_returns) {
         s = e[0];
@@ -890,7 +906,9 @@ class Grid extends Component {
     let new_v;
     const sum_reducer = (acc, val) => acc + val;
     for (let [s, rets] of states_all_returns) {
-      console.log(s + ' ' + rets);
+      log_str = `Returns [${s}] :  ${rets}`;
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 2);
       new_v = rets.reduce(sum_reducer) / rets.length;
       new_values.set(s, new_v);
     }
