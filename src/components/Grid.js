@@ -5,7 +5,7 @@ import { connect } from "react-redux";
 import '../styles/Grid.css';
 
 import {setRewards} from './helpers/rewards';
-import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues, getRandomState} from './helpers/general';
+import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues, getRandomState, printQ, printStatesActionsAllReturns, print2DArray} from './helpers/general';
 import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy, editSingleStatePolicy } from './helpers/policy';
 import { bellman_loop_actions, bellman_single_action } from './helpers/algorithms';
 import { addAction, resetAction } from '../redux/actions';
@@ -923,8 +923,204 @@ class Grid extends Component {
 
   }
 
-  monteCarloControlClick = (ev) => {
-    alert('monte carlo control');
+  monteCarloControlClick = async (ev) => {
+
+    this.setState({
+      ...this.state,
+      values: initValuesToZero(this.state.values),
+      gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
+      converged: false,
+      working: true,
+    });
+    await sleep(200);
+  
+    // Reset Log
+    this.props.resetAction();
+
+    const NBR_EPISODES = parseInt(this.nbrEpisodesInput.current.value, 10);
+    const all_actions = ['R', 'D', 'U', 'L'];
+    const sum_reducer = (acc, val) => acc + val;
+    
+    let game_over = false, action, next_state, reward;
+    let states_actions_rewards, states_actions_returns, states_actions_all_returns = new Map(), seen_states, seen_states_actions = [],  init_state, init_pos, first_iteration;
+    let G, s, j, episode_step;
+    let log_str;
+    let sum_rewards, max_q, newPol;
+    
+    // Init all Q[s][a] = 0
+    let Q = [];
+    for (let s of this.state.states) {
+      Q[s] = {};
+      for (let a of all_actions) {
+        Q[s][a] = 0;
+      }
+    }
+    // Init Map states_actions_all_returns.get(s)[action] to empty arrays for all s,a
+    for (let s of this.state.states) {
+      states_actions_all_returns.set(s,{});
+      for (let a of all_actions) {
+        states_actions_all_returns.get(s)[a] = []; // will store all returns, we will take their mean after
+      }
+    }
+
+    for (let i = 0 ; i < NBR_EPISODES ; i++) {
+
+      // Begining of each episode set the agent position to a random position
+      init_state = getRandomState(this.state.states, [this.state.goalState, this.state.holeState, ...this.state.wallStates]);
+      init_pos = getPosFromState(init_state);
+      log_str = `Start Episode ${i} : (Start State ${init_state})`;
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 0);
+
+      this.setState({
+        ...this.state,
+        currentI: init_pos[0],
+        currentJ: init_pos[1],
+        currentState: init_state,
+      });
+      await sleep(200);
+
+      // Play the Episode and store list of states ,actions and rewards
+      game_over = false;
+      episode_step = 0;
+      
+      
+      action = all_actions[Math.floor(Math.random() * all_actions.length)]; // First Action is Random
+      states_actions_rewards = [[this.state.currentState, action, 0], ];
+      seen_states = [this.state.currentState,];
+      
+      while (true) {
+        episode_step += 1;
+
+        // Wall bump ?
+        if (this.state.allowedMoves.get(this.state.currentState).includes(action)) {
+          next_state = this.moveAgent(action, true, getPosFromState(this.state.currentState));
+          await sleep(60);
+          if (seen_states.includes(next_state)) { // avoid infinte loop
+            reward = -10/episode_step;
+            game_over = true;
+          } else {
+            reward = this.state.rewards.get(next_state);
+            game_over = this.state.currentState === this.state.goalState || this.state.currentState === this.state.holeState;
+          }
+        } else {
+          // Bumped a wall, stays at the same state. we end episode;
+          next_state = this.state.currentState;
+          reward = -50;
+          game_over = true;
+        }
+
+        log_str = `Pushing (${next_state}, ${action}, ${reward})`;
+        console.log(log_str);
+        this.props.addAction(null, log_str, 'string', 2);
+
+        states_actions_rewards.push([next_state, action, reward]);
+        seen_states.push(next_state);
+
+
+        // Next Action
+        action = this.state.policy.get(this.state.currentState);
+        if (game_over) {
+          break;
+        }
+
+      }
+      log_str = print2DArray(states_actions_rewards, '[States,Actions,Rewards]')
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 1);
+      
+      // Compute Returns
+      log_str = 'Computing Returns ...';
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 1);
+      states_actions_rewards.reverse();
+      states_actions_returns = [];
+      sum_rewards = 0;
+      j = 0;
+      first_iteration = true;
+      for (let e of states_actions_rewards) {
+        s = e[0];
+        action = e[1];
+        reward = e[2];
+        if (first_iteration) {
+          first_iteration = false;
+        } else {
+          G = sum_rewards * (this.state.gamma**j);
+          states_actions_returns.push([s,action,G]);
+          j++;
+        }
+        sum_rewards += reward;
+      }
+      log_str = print2DArray(states_actions_rewards, '[States, Actions, Returns]');
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 2);
+
+      // Store all Returns of each State
+      log_str = 'Storing Returns and updating Q';
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 1);
+      seen_states_actions = []; // just of the current episode
+      for (let e of states_actions_returns) {
+        s = e[0];
+        action = e[1];
+        G = e[2];
+        if (!seen_states_actions.includes(`${s}${action}`)) {
+          seen_states_actions.push(`${s}${action}`);
+          states_actions_all_returns.get(s)[action].push(G);
+          Q[s][action] = states_actions_all_returns.get(s)[action].reduce(sum_reducer) / states_actions_all_returns.get(s)[action].length; 
+        }
+      }
+      log_str = printStatesActionsAllReturns(states_actions_all_returns);
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 2);
+
+
+      // Policy Improvement
+      log_str = 'Policy Improvement';
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 1);
+      log_str = printQ(Q);
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 2);
+      newPol = new Map(this.state.policy);
+      for (let s of this.state.states) {
+        max_q = Number.NEGATIVE_INFINITY;
+        action = '';
+        for(let a in Q[s]) {
+          //console.log(`Q[${s}][${a}] = ${Q[s][a]}`);
+          if (Q[s][a] > max_q) {
+            max_q = Q[s][a];
+            action = a;
+          }
+        }
+        newPol.set(s, action);
+      }
+
+      this.setState({
+        ...this.state,
+        policy: newPol,
+      });
+      await sleep(200);
+    }
+
+    let newVals = new Map(this.state.values);
+    for (let s of this.state.states) {
+      max_q = Number.NEGATIVE_INFINITY;
+      for (let a in Q[s]) {
+        if (Q[s][a] > max_q) {
+          max_q = Q[s][a];
+        }
+      }
+      newVals.set(s, max_q);
+    }
+
+    this.setState({
+      ...this.state,
+      values: newVals,
+      converged: true,
+      working: false,
+    });
+
   }
 
 

@@ -175,3 +175,32 @@ export const constructGrid = (width, height, startPos, goalPos, holePos, wallsPo
   };
 
 
+export const printQ = (Q) => {
+  let ret_str = '';
+  for (let s in Q) {
+    ret_str += `\nQ[${s}]`;
+    for (let a in Q[s]) {
+      ret_str += `[${a}] = ${Q[s][a]}`;
+    }
+  }
+  return ret_str;
+};
+
+export const print2DArray = (arr, title) => {
+  let ret_str = `${title} : \n`;
+  for (let e of arr) {
+    ret_str += `(${e}), `;
+  }
+  return ret_str;
+}
+
+export const printStatesActionsAllReturns = (m) => {
+  let ret_str = 'All returns of (s,a): \n';
+  for (let [s, v] of m) {
+    ret_str += `\n(${s})`;
+    for (let a in v) {
+      ret_str += ` [${a}] = [ ${v[a]} ]`;
+    }
+  }
+  return ret_str;
+};
