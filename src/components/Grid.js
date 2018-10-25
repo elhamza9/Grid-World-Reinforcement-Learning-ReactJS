@@ -364,7 +364,7 @@ class Grid extends Component {
 
 
   onAlgorithmsRadioChange = (ev) => {
-    if (ev.target.value === 'dynamicprogramming' || ev.target.value === 'montecarlo') {
+    if (ev.target.value === 'dynamicprogramming' || ev.target.value === 'montecarlo' || ev.target.value === 'temporaldifference') {
       this.setState({
         ...this.state,
         algorithms: ev.target.value,
@@ -1123,6 +1123,103 @@ class Grid extends Component {
 
   }
 
+  tdZeroClick = async (ev) => {
+
+    this.setState({
+      ...this.state,
+      values: initValuesToZero(this.state.values),
+      gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
+      converged: false,
+      working: true,
+    });
+    await sleep(200);
+  
+    // Reset Log
+    this.props.resetAction();
+
+
+    const NBR_EPISODES = 400, ALPHA = 0.1;
+    let states_rewards, game_over, new_state, action, reward, reward_t1, sr_t0, sr_t1, new_v, old_v_t0, v_t1;
+    let newValues = new Map(this.state.values);
+
+
+    for (let i = 0 ; i < NBR_EPISODES ; i++) {
+      states_rewards = [];
+      game_over = false;
+      this.setState({
+        ...this.state,
+        currentI: this.props.startPos[0],
+        currentJ: this.props.startPos[1],
+        currentState: this.state.startState,
+        values: newValues,
+      });
+      await sleep(60);
+
+      // Play Episode and store (state,reward) couples
+      while (!game_over) {
+        action = this.state.policy.get(this.state.currentState);
+        new_state = this.moveAgent(action, true, [this.state.currentI, this.state.currentJ]);
+        await sleep(60);
+        reward = this.state.rewards.get(new_state);
+        states_rewards.push([new_state, reward]);
+
+        game_over = this.state.currentState === this.state.goalState || this.state.currentState === this.state.holeState;
+
+      }
+      console.log('Visited States/Rewards', states_rewards);
+
+      // Calculate V(s)
+      for (let j = 0 ; j < states_rewards.length-1 ; j++) {
+        sr_t0 = states_rewards[j]; // we update the V of this state based on reward and V of next state 
+        sr_t1 = states_rewards[j+1];
+
+        old_v_t0 = this.state.values.get(sr_t0[0]);
+        v_t1 = this.state.values.get(sr_t1[0]);
+        reward_t1 = sr_t1[1];
+        new_v = old_v_t0 + ALPHA * (reward_t1 + this.state.gamma*v_t1 - old_v_t0);
+
+        newValues.set(sr_t0[0], new_v);
+
+      }
+
+    }
+
+
+    this.setState({
+      ...this.state,
+      converged: true,
+      working: false,
+      values: newValues
+    });
+
+  }
+
+  sarsaClick = async (ev) => {
+
+    this.setState({
+      ...this.state,
+      values: initValuesToZero(this.state.values),
+      gamma: parseFloat(this.gammaInput.current.value), // get Gamma from input
+      converged: false,
+      working: true,
+    });
+    await sleep(200);
+  
+    // Reset Log
+    this.props.resetAction();
+
+
+    alert('SARSA')
+
+
+
+    this.setState({
+      ...this.state,
+      converged: true,
+      working: false,
+    });
+
+  }
 
   render() {
     console.log('render grid');
@@ -1257,6 +1354,10 @@ class Grid extends Component {
                 <input type="radio" value="montecarlo" name="algorithms" onChange={this.onAlgorithmsRadioChange} />
                 <label>Monte Carlo</label>
               </div>
+              <div className="radio">
+                <input type="radio" value="temporaldifference" name="algorithms" onChange={this.onAlgorithmsRadioChange} />
+                <label>Temporal Difference</label>
+              </div>
           </div>
           <div className="options">
             <div className="actions-option" hidden={this.state.algorithms !=='dynamicprogramming'}>
@@ -1267,8 +1368,12 @@ class Grid extends Component {
             <div className="actions-option" hidden={this.state.algorithms !== 'montecarlo'}>
               <button onClick={this.monteCarloPredictionClick}  className="action-btn" >Monte Carlo Prediction</button>
               <label>Nbr of Episodes </label>
-              <input ref={this.nbrEpisodesInput} className="small-input" type="text" defaultValue="100" />
               <button onClick={this.monteCarloControlClick}  className="action-btn">Monte Carlo Control</button>
+            </div>
+            <input ref={this.nbrEpisodesInput} className="small-input" type="text" defaultValue="100" hidden={this.state.algorithms !== 'montecarlo' || this.state.algorithms !== 'temporaldifference'} />
+            <div className="actions-option" hidden={this.state.algorithms !== 'temporaldifference'}>
+              <button onClick={this.tdZeroClick} className="action-btn">TD(0) Prediction</button>
+              <button onClick={this.sarsaClick} className="action-btn">SARSA</button>
             </div>
           </div>
         </div>
