@@ -78,3 +78,14 @@ export const setStatesTransitionsToDeterministic = (states_transitions_map) => {
     }
     return new_map;
 }
+
+
+export const epsilonSoftAction = (action, eps, all_actions) => {
+    let p = Math.random();
+    if (p < 1 - eps) {
+        return action;
+    } else {
+        
+        return all_actions[Math.floor(Math.random() * all_actions.length)];
+    }
+};

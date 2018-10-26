@@ -180,7 +180,7 @@ export const printQ = (Q) => {
   for (let s in Q) {
     ret_str += `\nQ[${s}]`;
     for (let a in Q[s]) {
-      ret_str += `[${a}] = ${Q[s][a]}`;
+      ret_str += `[${a}] = ${Q[s][a].toFixed(3)}`;
     }
   }
   return ret_str;
@@ -203,4 +203,17 @@ export const printStatesActionsAllReturns = (m) => {
     }
   }
   return ret_str;
+};
+
+export const getMaxArray = (arr) => {
+  // Associative Array has form ['A': 1, 'B': 2, ...] returns the key of the biggest val
+  let max_val = Number.NEGATIVE_INFINITY;
+  let max_key = null;
+  for (let k in arr) {
+    if (arr[k] > max_val) {
+      max_val = arr[k];
+      max_key = k;
+    }
+  }
+  return [max_key, max_val];
 };

@@ -5,8 +5,8 @@ import { connect } from "react-redux";
 import '../styles/Grid.css';
 
 import {setRewards} from './helpers/rewards';
-import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues, getRandomState, printQ, printStatesActionsAllReturns, print2DArray} from './helpers/general';
-import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy, editSingleStatePolicy } from './helpers/policy';
+import {constructGrid, getStateFromPos, getPosFromState, initValuesToZero, randomizeValues, getRandomState, printQ, printStatesActionsAllReturns, print2DArray, getMaxArray} from './helpers/general';
+import { randomizePolicy, setStatesTransitionsToUniform, clearPolicy, setStatesTransitionsToDeterministic, setStatesTransitionsToWindy, editSingleStatePolicy, epsilonSoftAction } from './helpers/policy';
 import { bellman_loop_actions, bellman_single_action } from './helpers/algorithms';
 import { addAction, resetAction } from '../redux/actions';
 
@@ -1138,7 +1138,8 @@ class Grid extends Component {
     this.props.resetAction();
 
 
-    const NBR_EPISODES = 400, ALPHA = 0.1;
+    const NBR_EPISODES = parseInt(this.nbrEpisodesInput.current.value, 10);
+    const ALPHA = 0.1;
     let states_rewards, game_over, new_state, action, reward, reward_t1, sr_t0, sr_t1, new_v, old_v_t0, v_t1;
     let newValues = new Map(this.state.values);
 
@@ -1208,15 +1209,121 @@ class Grid extends Component {
     // Reset Log
     this.props.resetAction();
 
+    const NBR_EPISODES = parseInt(this.nbrEpisodesInput.current.value, 10);
+    const ALL_ACTIONS = ['R', 'D', 'U', 'L'];
+    const ALPHA = 0.1;
+    let game_over, a1, a2, s1, s2, alpha, reward, t;
+    let log_str;
+    
+    // Init all Q[s][a] = 0 and update_count_sa to 1
+    let Q = [], update_count_sa = [];
+    for (let s of this.state.states) {
+      Q[s] = {};
+      update_count_sa[s] = {};
+      for (let a of ALL_ACTIONS ) {
+        Q[s][a] = 0;
+        update_count_sa[s][a] = 1.0;
+      }
+    }
+    log_str = printQ(Q);
+    console.log(log_str);
+    this.props.addAction(null, log_str, 'string', 2);
 
-    alert('SARSA')
 
+    for (let i = 0 ; i < NBR_EPISODES ; i++) {
+
+      log_str = `Episode ${i} :`;
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 1);
+
+      // return to start position
+      this.setState({
+        ...this.state,
+        currentI: this.props.startPos[0],
+        currentJ: this.props.startPos[1],
+        currentState: this.state.startState,
+      });
+      await sleep(60);
+
+      if (i % 100 === 0) {
+        t += 1e-2;
+      }
+
+      // play episode
+      game_over = false;
+      // choose next first action by argmaxing from Q[s] with soft epsilon
+      a1 = getMaxArray(Q[this.state.currentState])[0];
+      a1 = epsilonSoftAction(a1, 0.5/t, ALL_ACTIONS);
+      
+      s1 = this.state.currentState;
+
+      while (!game_over) {
+        log_str = `(${s1}, ${a1})`;
+        console.log(log_str);
+        this.props.addAction(null, log_str, 'string', 2);
+
+        // test wall bump
+        if (this.state.allowedMoves.get(this.state.currentState).includes(a1)) {
+          s2 = this.moveAgent(a1, true, getPosFromState(s1));
+          await sleep(50);
+        } else {
+          s2 = s1;
+        }
+        reward = this.state.rewards.get(s2);
+
+
+        // next action
+        a2 = getMaxArray(Q[s2])[0];
+        a2 = epsilonSoftAction(a2, 0.5/t, ALL_ACTIONS);
+
+        // new Alpha Decay
+        alpha = ALPHA / update_count_sa[s1][a1];
+        update_count_sa[s1][a1] += 0.005;
+
+        // Main Update Equation
+        Q[s1][a1] = Q[s1][a1] + alpha*(reward + this.state.gamma*Q[s2][a2] - Q[s1][a1]);
+        log_str = `updated Q[${s1}][${a1}] = ${Q[s1][a1]} (alpha = ${alpha.toFixed(2)})`;
+        console.log(log_str);
+        this.props.addAction(null, log_str, 'string', 2);
+
+        game_over = this.state.currentState === this.state.goalState || this.state.currentState === this.state.holeState;
+
+        if (!game_over) {
+          // next state become current state
+          s1 = s2;
+          a1 = a2;
+        }
+
+      }
+
+      log_str = printQ(Q);
+      console.log(log_str);
+      this.props.addAction(null, log_str, 'string', 2);
+
+    }
+
+
+    // set the final policy and values
+    let newPolicy = new Map();
+    let newValues = new Map();
+    let tmp;
+    for (let s in Q) {
+      tmp = getMaxArray(Q[s]);
+      newPolicy.set(s, tmp[0]);
+      newValues.set(s, tmp[1]);
+    }
+
+    log_str = 'SARSA Converged !';
+    console.log(log_str);
+    this.props.addAction(null, log_str, 'string', 0);
 
 
     this.setState({
       ...this.state,
       converged: true,
       working: false,
+      policy: newPolicy,
+      values: newValues,
     });
 
   }
@@ -1367,10 +1474,12 @@ class Grid extends Component {
             </div>
             <div className="actions-option" hidden={this.state.algorithms !== 'montecarlo'}>
               <button onClick={this.monteCarloPredictionClick}  className="action-btn" >Monte Carlo Prediction</button>
-              <label>Nbr of Episodes </label>
               <button onClick={this.monteCarloControlClick}  className="action-btn">Monte Carlo Control</button>
             </div>
-            <input ref={this.nbrEpisodesInput} className="small-input" type="text" defaultValue="100" hidden={this.state.algorithms !== 'montecarlo' || this.state.algorithms !== 'temporaldifference'} />
+            <div className="actions-option" hidden={!(this.state.algorithms === 'montecarlo' || this.state.algorithms === 'temporaldifference')} >
+              <label>Nbr of Episodes </label>
+              <input ref={this.nbrEpisodesInput} className="small-input" type="text" defaultValue="500" />
+            </div>
             <div className="actions-option" hidden={this.state.algorithms !== 'temporaldifference'}>
               <button onClick={this.tdZeroClick} className="action-btn">TD(0) Prediction</button>
               <button onClick={this.sarsaClick} className="action-btn">SARSA</button>
