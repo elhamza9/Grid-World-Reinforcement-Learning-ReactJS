@@ -11,6 +11,7 @@ import { bellman_loop_actions, bellman_single_action } from './helpers/algorithm
 import { addAction, resetAction } from '../redux/actions';
 
 const sleep = (ms) => { return new Promise(resolve => setTimeout(resolve, ms))};
+let ITERATION_STR = '';
 
 class Grid extends Component {
 
@@ -393,6 +394,8 @@ class Grid extends Component {
         this.props.addAction(null, '(Policy Evaluation Start !)', 'string', 0);
         while (true) {
           pol_ev_count += 1;
+          ITERATION_STR = pol_ev_count.toString();
+
           new_values_map = new Map(this.state.values);
           this.props.addAction(null, new_values_map, '2D', 1);
           delta = 0;
@@ -479,12 +482,13 @@ class Grid extends Component {
     this.props.addAction('Start Policy Iteration', null, null, 0);
     while (true) {
       pol_iteration_count += 1;
+      ITERATION_STR = pol_iteration_count.toString();
       pol_ev_count = 0;
 
       this.props.addAction(null, `Iteration ${pol_iteration_count}:`, 'string', 0);
       this.props.addAction(null, this.state.policy, '2D', 0 );
-     
-     
+
+
       // Step 1: policy evaluation
       this.props.addAction(null, '(Policy Evaluation Step Start !)', 'string', 0);
       while (true) {
@@ -671,6 +675,7 @@ class Grid extends Component {
     let step_one_count = 0;
     while (true) {
       step_one_count += 1;
+      ITERATION_STR = step_one_count.toString();
       new_values_map = new Map(this.state.values);
       this.props.addAction(null, this.state.values, '2D', 0);
       delta = 0;
@@ -818,6 +823,8 @@ class Grid extends Component {
     let sum_rewards;
     for (let i = 0 ; i < NBR_EPISODES ; i++) {
 
+      ITERATION_STR = (i + 1).toString();
+
       // Begining of each episode set the agent position to a random position
       init_state = getRandomState(this.state.states, [this.state.goalState, this.state.holeState, ...this.state.wallStates]);
       init_pos = getPosFromState(init_state);
@@ -964,6 +971,8 @@ class Grid extends Component {
     }
 
     for (let i = 0 ; i < NBR_EPISODES ; i++) {
+
+      ITERATION_STR = (i + 1).toString();
 
       // Begining of each episode set the agent position to a random position
       init_state = getRandomState(this.state.states, [this.state.goalState, this.state.holeState, ...this.state.wallStates]);
@@ -1145,6 +1154,9 @@ class Grid extends Component {
 
 
     for (let i = 0 ; i < NBR_EPISODES ; i++) {
+
+      ITERATION_STR = (i + 1).toString();
+
       states_rewards = [];
       game_over = false;
       this.setState({
@@ -1231,6 +1243,8 @@ class Grid extends Component {
 
 
     for (let i = 0 ; i < NBR_EPISODES ; i++) {
+
+      ITERATION_STR = (i + 1).toString();
 
       log_str = `Episode ${i} :`;
       console.log(log_str);
@@ -1623,7 +1637,7 @@ class Grid extends Component {
         <div className="table-wrapper">
           <div className="status">
             <h4 id="converged" hidden={!this.state.converged}>CONVERGED !</h4>
-            <h4 id="working" hidden={!this.state.working}>WORKING</h4>
+            <h4 id="working" hidden={!this.state.working}>WORKING ({ITERATION_STR})</h4>
           </div>
           <div>
             <table ref={this.gridTable} onFocus={this.onGridTableFocus} className={`${this.state.gridContent} ${this.state.windy ? 'windy' : ''} ${this.state.converged ? 'converged' : ''} ${this.state.working ? 'working' : ''} ${this.state.tableIsEditable ? 'editable' : ''}`}>
