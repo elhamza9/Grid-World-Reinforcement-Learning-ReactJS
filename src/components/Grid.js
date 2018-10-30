@@ -932,6 +932,7 @@ class Grid extends Component {
 
   monteCarloControlClick = async (ev) => {
 
+
     this.setState({
       ...this.state,
       values: initValuesToZero(this.state.values),
@@ -1029,6 +1030,15 @@ class Grid extends Component {
 
         // Next Action
         action = this.state.policy.get(this.state.currentState);
+        if (this.state.windy) {
+          // another action than the one chosen can occur with pr 0.5/3
+          if (Math.random() >= 0.5) {
+              let all_actions = ['R','L','D','U'];
+              all_actions.splice(all_actions.indexOf(action), 1);
+              action = all_actions[Math.floor(Math.random()*all_actions.length)];
+              //alert(`Random action for state ${this.state.currentState} : ${action}`)
+          }
+        }
         if (game_over) {
           break;
         }
@@ -1171,6 +1181,15 @@ class Grid extends Component {
       // Play Episode and store (state,reward) couples
       while (!game_over) {
         action = this.state.policy.get(this.state.currentState);
+        if (this.state.windy) {
+          // another action than the one chosen can occur with pr 0.5/3
+          if (Math.random() >= 0.5) {
+              let all_actions = ['R','L','D','U'];
+              all_actions.splice(all_actions.indexOf(action), 1);
+              action = all_actions[Math.floor(Math.random()*all_actions.length)];
+              //alert(`Random action for state ${this.state.currentState} : ${action}`)
+          }
+        }
         new_state = this.moveAgent(action, true, [this.state.currentI, this.state.currentJ]);
         await sleep(60);
         reward = this.state.rewards.get(new_state);
@@ -1217,14 +1236,14 @@ class Grid extends Component {
       working: true,
     });
     await sleep(200);
-  
+
     // Reset Log
     this.props.resetAction();
 
     const NBR_EPISODES = parseInt(this.nbrEpisodesInput.current.value, 10);
     const ALL_ACTIONS = ['R', 'D', 'U', 'L'];
     const ALPHA = 0.1;
-    let game_over, a1, a2, s1, s2, alpha, reward, t;
+    let game_over, a1, a2, s1, s2, alpha, reward, t = 1;
     let log_str;
     
     // Init all Q[s][a] = 0 and update_count_sa to 1
@@ -1269,12 +1288,24 @@ class Grid extends Component {
       a1 = getMaxArray(Q[this.state.currentState])[0];
       a1 = epsilonSoftAction(a1, 0.5/t, ALL_ACTIONS);
 
+
       s1 = this.state.currentState;
 
       while (!game_over) {
+
+        if (this.state.windy) {
+          // another action than the one chosen can occur with pr 0.5/3
+          if (Math.random() >= 0.5) {
+              let all_actions = ['R','L','D','U'];
+              all_actions.splice(all_actions.indexOf(a1), 1);
+              a1 = all_actions[Math.floor(Math.random()*all_actions.length)];
+              //alert(`Random action for state ${this.state.currentState} : ${action}`)
+          }
+        }
+
         log_str = `(${s1}, ${a1})`;
         console.log(log_str);
-        this.props.addAction(null, log_str, 'string', 2);
+        this.props.addAction(null, log_str, 'string', 0);
 
         // test wall bump
         if (this.state.allowedMoves.get(this.state.currentState).includes(a1)) {
@@ -1298,7 +1329,7 @@ class Grid extends Component {
         Q[s1][a1] = Q[s1][a1] + alpha*(reward + this.state.gamma*Q[s2][a2] - Q[s1][a1]);
         log_str = `updated Q[${s1}][${a1}] = ${Q[s1][a1]} (alpha = ${alpha.toFixed(2)})`;
         console.log(log_str);
-        this.props.addAction(null, log_str, 'string', 2);
+        this.props.addAction(null, log_str, 'string', 1);
 
         game_over = this.state.currentState === this.state.goalState || this.state.currentState === this.state.holeState;
 
@@ -1360,7 +1391,7 @@ class Grid extends Component {
     const NBR_EPISODES = parseInt(this.nbrEpisodesInput.current.value, 10);
     const ALL_ACTIONS = ['R', 'D', 'U', 'L'];
     const ALPHA = 0.1;
-    let game_over, a1, a2, s1, s2, alpha, reward, t;
+    let game_over, a1, a2, s1, s2, alpha, reward, t = 1;
     let log_str;
     
     // Init all Q[s][a] = 0 and update_count_sa to 1
@@ -1380,9 +1411,11 @@ class Grid extends Component {
 
     for (let i = 0 ; i < NBR_EPISODES ; i++) {
 
+      ITERATION_STR = (i + 1).toString();
+
       log_str = `Episode ${i} :`;
       console.log(log_str);
-      this.props.addAction(null, log_str, 'string', 1);
+      this.props.addAction(null, log_str, 'string', 0);
 
       // return to start position
       this.setState({
@@ -1406,9 +1439,18 @@ class Grid extends Component {
 
       while (!game_over) {
         a1 = epsilonSoftAction(a1, 0.5/t, ALL_ACTIONS);
+        if (this.state.windy) {
+          // another action than the one chosen can occur with pr 0.5/3
+          if (Math.random() >= 0.5) {
+              let all_actions = ['R','L','D','U'];
+              all_actions.splice(all_actions.indexOf(a1), 1);
+              a1 = all_actions[Math.floor(Math.random()*all_actions.length)];
+              //alert(`Random action for state ${this.state.currentState} : ${action}`)
+          }
+        }
         log_str = `(${s1}, ${a1})`;
         console.log(log_str);
-        this.props.addAction(null, log_str, 'string', 2);
+        this.props.addAction(null, log_str, 'string', 1);
 
         // test wall bump
         if (this.state.allowedMoves.get(this.state.currentState).includes(a1)) {
@@ -1431,7 +1473,7 @@ class Grid extends Component {
         Q[s1][a1] = Q[s1][a1] + alpha*(reward + this.state.gamma*Q[s2][a2] - Q[s1][a1]);
         log_str = `updated Q[${s1}][${a1}] = ${Q[s1][a1]} (alpha = ${alpha.toFixed(2)})`;
         console.log(log_str);
-        this.props.addAction(null, log_str, 'string', 2);
+        this.props.addAction(null, log_str, 'string', 1);
 
         game_over = this.state.currentState === this.state.goalState || this.state.currentState === this.state.holeState;
 
@@ -1476,7 +1518,7 @@ class Grid extends Component {
   }
 
   render() {
-    console.log('render grid');
+    //console.log('render grid');
     let rows = [], val, s, isStartPos, isGoalPos, isHolePos, isWallPos, a;
     for (let i = 0 ; i < this.props.height ; i++) {
       let cols = [];
